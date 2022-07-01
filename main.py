@@ -111,7 +111,7 @@ def main():
                 #remove sync
                 syncs.pop(deleteIndex - 1)
                 #write updated syncs to json
-                sync_functions.WriteSyncs(syncs
+                sync_functions.WriteSyncs(syncs)
                 logging.info('Sync "{}" deleted.'.format(nickname))
 
         #integrated with apply edits
