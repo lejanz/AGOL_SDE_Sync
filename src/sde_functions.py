@@ -145,12 +145,18 @@ def BackupFeatureClass(service, sync_num):
         
     
     from datetime import datetime
+    ##import shutil, os
+    
     now = datetime.now() # current date and time
     today = now.strftime("%m%d%Y")
 
     if (not arcpy):
         logging.info("Loading arcpy (this may take awhile)...")
-        from arcpy import Copy_management, Delete_management 
+        from arcpy import Copy_management, Delete_management
+
+    ##fileout = r'N:\Admin\Backup\LSync_Backup\syncs_ID'+ str(sync_num)+ '_' + str(today) + '.json'
+    ##filein = r'config\syncs.json'
+    ##shutil.copy(filein, fileout)
 
     fcName = service['featureclass']
     db = service['database']
