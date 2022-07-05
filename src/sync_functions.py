@@ -86,8 +86,16 @@ def CreateNewSync(cfg):
             ImportSDE()
 
             #get details
-            hostname = raw_input('Enter SDE hostname (i.e. inpredwgis2):')
-            database = raw_input('Enter SDE database name (i.e. redw):')
+            sde_connect = raw_input('Enter path to .sde file:')
+
+            try:
+                hostname, database = sde.GetServerFromSDE(sde_connect)
+            except Exception as e:
+                print("Unable to open .sde file")
+                continue
+            
+            #hostname = raw_input('Enter SDE hostname (i.e. inpredwgis2):')
+            #database = raw_input('Enter SDE database name (i.e. redw):')
             fcName = raw_input('Enter featureclass name:')
 
             print('')
@@ -111,6 +119,7 @@ def CreateNewSync(cfg):
                 service = {'servergen': {'stateId': stateId, 'globalIds': globalIds},
                            'type': 'SDE',
                            'featureclass': fcName,
+                           'sde_connect': sde_connect,
                            'hostname': hostname,
                            'database': database,
                            'nickname': nickname}

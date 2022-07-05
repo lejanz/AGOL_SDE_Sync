@@ -9,6 +9,7 @@ from datetime import datetime
 from error import Cancelled, GUIDError
 import EsriWktConverter as ewc
 #import logging
+arcpy = None
 
 def RemoveNulls(dict_in):
     #returns dictionary with only non-null entries
@@ -38,6 +39,24 @@ def LowercaseDataframe(df):
     df.columns = [col.lower() for col in df.columns]
 
     return df
+
+#gets SQL server and database from .sde file
+def GetServerFromSDE(sde_file):
+    f = open(sde_file, "rb")
+    server = f.read()
+    #print(server)
+    try:
+        if('\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1\x00' in server):
+            server = server.replace('\n', '')
+            db = server.split('D\x00A\x00T\x00A\x00B\x00A\x00S\x00E')[1].split('\x08\x00')[1].split('\x00\x00')[1]
+            db = db.replace('\x00', '')
+            server = server.split('s\x00q\x00l\x00s\x00e\x00r\x00v\x00e\x00r\x00:')[1].split('\x00\x00')[0]
+            server = server.replace('\x00', '')
+            return server, db
+        else:
+            raise Exception()
+    except Exception as e:
+        raise Exception("Invalid SDE file")
 
 #connect to sql server
 def Connect(server, database, UID, PWD):
@@ -106,21 +125,60 @@ def ReadSQLWithDebug(query, connection):
     df = LowercaseDataframe(df)
     return df
 
-def BackupFeatureClass(connection, fcName, sync_num):
+def BackupFeatureClass(service, sync_num):
+
+    try:
+        sde_connect = service['sde_connect']
+    except:
+        print("SDE service does not include .sde filepath. Please recreate this sync ASAP.")
+        while(True):
+            sde_connect = raw_input("Enter .sde filepath for this SDE database:")
+            try:
+                server, db = GetServerFromSDE(sde_connect)
+            except:
+                print("Invalid filepath!")
+                continue
+            if not db == service['database']:
+                print("Database name does not match this service!")
+                continue
+            break
+        
+    
     from datetime import datetime
     now = datetime.now() # current date and time
     today = now.strftime("%m%d%Y")
+
+    if (not arcpy):
+        logging.info("Loading arcpy (this may take awhile)...")
+        from arcpy import Copy_management, Delete_management 
+
+    fcName = service['featureclass']
+    db = service['database']
     
     backup_name = '{}_BACKUP_{}_{}'.format(fcName, str(sync_num), today)
 
-    print('Creating backup at: {}'.format(backup_name))
+    fcPath = '{}\\{}.dbo.{}'.format(sde_connect, db, fcName)
+    backup_path = '{}\\{}.dbo.{}'.format(sde_connect, db, backup_name)
+
+    logging.debug('Creating backup at: {}'.format(backup_name))
+
+    # if FC already exists, best to delete it, and if it fail, continue
+    try:
+        Delete_management(backup_path, "FeatureClass")
+        logging.debug('Attempting to delete feature class (in case it already exists')
+    except:
+        logging.debug('Feature class copy does not currently exist. Ok to crreate')    
+
+    # Process:
+    Copy_management(fcPath, backup_path, "FeatureClass")
+    logging.info("Created: " + backup_path)
     
-    query = 'SELECT * INTO {} FROM {}_evw'.format(backup_name, fcName)
+    #query = 'SELECT * INTO {} FROM {}_evw'.format(backup_name, fcName)
 
-    cursor = connection.cursor()
-    cursor.execute(query)
+    #cursor = connection.cursor()
+    #cursor.execute(query)
 
-    print(cursor.messages)
+    #print(cursor.messages)
     
 
 def GetRowcount(connection):    #gets number of rows affected by most recent query
@@ -308,9 +366,12 @@ def GetDatetimeColumns(datatypes):
 
 #convert SQL datetime string to epoch timestamp
 def SqlDatetimeToEpoch(string):
-    string = string.split('.')[0]
-    utc_time = datetime.strptime(string, "%Y-%m-%d %H:%M:%S")
-    return (utc_time - datetime(1970, 1, 1)).total_seconds()*1000
+    if string is not None: 
+        string = string.split('.')[0]
+        utc_time = datetime.strptime(string, "%Y-%m-%d %H:%M:%S")
+        return (utc_time - datetime(1970, 1, 1)).total_seconds()*1000
+    else:
+        return None
     
 def SqlToJson(df, datatypes):
     #takes adds or updates dataframe and converts into agol-json-like dictionary
@@ -350,6 +411,7 @@ def SqlToJson(df, datatypes):
     return dict_out
 
 def JsonToSql(deltas, datatypes):
+    logging.debug("Converting json to SQL")
     #takes adds or updates json and turns it into sql-writable format
     dict_out = []
 
@@ -372,9 +434,13 @@ def JsonToSql(deltas, datatypes):
 
         #clean attributes
         for key in attributes.keys():
+
+            #turn Nones and empty objects into NULLs for SQL
+            if (attributes[key] in [None, {}]):
+                attributes[key] = "NULL"
             
             #convert epoch timestamps to sql string
-            if key.lower() in datetime_columns:
+            elif key.lower() in datetime_columns:
                 timestamp = True
                 try:
                     epoch = int(attributes[key])
@@ -384,20 +450,17 @@ def JsonToSql(deltas, datatypes):
                     if epoch < 0:
                         epoch = 0
                     attributes[key] = "DATEADD(S, {}, '1970-01-01')".format(epoch/1000)
-                    
-            else:
-                #turn Nones and empty objects into NULLs for SQL
-                if (attributes[key] in [None, {}]):
+                else:
                     attributes[key] = "NULL"
 
                 #add quotes to strings, escape apostrophes
-                elif (not isinstance(attributes[key], float)) and (not isinstance(attributes[key], int)):
-                    attributes[key] = str(attributes[key]).replace("'", "''")
-                    attributes[key] = "'{}'".format(attributes[key])
+            elif (not isinstance(attributes[key], float)) and (not isinstance(attributes[key], int)):
+                attributes[key] = str(attributes[key]).replace("'", "''")
+                attributes[key] = "'{}'".format(attributes[key])
 
-                #convert everything else to a string for joining later
-                else:
-                    attributes[key] = str(attributes[key])
+            #convert everything else to a string for joining later
+            else:
+                attributes[key] = str(attributes[key])
 
         #combine attributes and shape into one dict
         attributes.update({'shape': SHAPE})
@@ -492,7 +555,7 @@ def Update(connection, fcName, dict_in):
 def Delete(connection, fcName, GUID):
     #remove feature from versioned view of featureclass
 
-    logging.info('Deleting object {}'.format(GUID))#, 2, indent=4)
+    logging.info("Deleting object '{}'".format(GUID))#, 2, indent=4)
     
     query = "DELETE FROM  {}_evw WHERE GLOBALID = '{}'".format(fcName, GUID)
     
@@ -556,11 +619,12 @@ def ExtractChanges(service, cfg):#connection, fcName, lastGlobalIds, lastState, 
     return deltas, data, srid
 
 def AskToCancel(e):     #asks to cancel edits after a failed edit
-    logging.error(e.message)
+    print(e.message)
     if(raw_input("Edit failed. Press enter to ignore, or type anything to cancel sync") != ''):
-        raise Cancelled('Sync cancelled.')
+        return True
         
     logging.warning('Continuing although edit failed')
+    return False
               
 def ApplyEdits(service, cfg, deltas, sync_num, backup, data=None): #connection, fcName, deltas, datatypes):
     #applies deltas to versioned view. Returns success codes and new SDE_STATE_ID
@@ -578,7 +642,7 @@ def ApplyEdits(service, cfg, deltas, sync_num, backup, data=None): #connection, 
         datatypes = data['datatypes']
 
     if backup:
-        BackupFeatureClass(connection, fcName, sync_num)
+        BackupFeatureClass(service, sync_num)
 
     #get attribute names
     columns = GetDatatypes(connection, fcName)['column_name'].tolist()
@@ -619,7 +683,8 @@ def ApplyEdits(service, cfg, deltas, sync_num, backup, data=None): #connection, 
         try: 
             rowcount = Add(connection, fcName, add)
         except Exception as e:
-            AskToCancel(e)
+            if(AskToCancel(e)):
+                raise
             rowcount = 0
               
         if rowcount > 0: 
@@ -629,7 +694,8 @@ def ApplyEdits(service, cfg, deltas, sync_num, backup, data=None): #connection, 
         try: 
             rowcount = Update(connection, fcName, update)
         except Exception as e:
-            AskToCancel(e)
+            if(AskToCancel(e)):
+                raise
             rowcount = 0
 
         if rowcount > 0: 
@@ -639,7 +705,8 @@ def ApplyEdits(service, cfg, deltas, sync_num, backup, data=None): #connection, 
         try: 
             rowcount = Delete(connection, fcName, GUID)
         except Exception as e:
-            AskToCancel(e)
+            if(AskToCancel(e)):
+                raise
             rowcount = 0
 
         if rowcount > 0: 
@@ -659,8 +726,8 @@ def ApplyEdits(service, cfg, deltas, sync_num, backup, data=None): #connection, 
         if choice == 2:
             raise Cancelled('Sync cancelled.')
     
-    connection.commit()
-    logging.debug('Changes committed.')
+        connection.commit()
+        logging.info('Changes committed.')
 
     #get new state id and global ids
     state_id = GetCurrentStateId(connection)

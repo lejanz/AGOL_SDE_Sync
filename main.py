@@ -55,17 +55,23 @@ def GetSyncNum():
     return sync_num
     
 def PrintEdits(deltas, first_service, second_service):
-    print("{} adds, {} updates, and {} deletes will be applied from {} to {}.".format(len(deltas['adds']),
-                                                                                        len(deltas['updates']),
-                                                                                        len(deltas['deleteIds']),
+    num_adds = len(deltas['adds'])
+    num_updates = len(deltas['updates'])
+    num_deletes = len(deltas['deleteIds'])
+    print("{} adds, {} updates, and {} deletes will be applied from {} to {}.".format(num_adds,
+                                                                                        num_updates,
+                                                                                        num_deletes,
                                                                                         first_service['nickname'],
                                                                                         second_service['nickname']))
+    return num_adds + num_updates + num_deletes
 
 def main(): 
     logging.debug('-------------')
     logging.debug('Program start')
     #load config
     cfg = LoadConfig()
+    if not cfg:
+        return
     #ui.logger.setLogLevel(cfg)
 
     #load syncs

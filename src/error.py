@@ -35,7 +35,7 @@ class JSONDecodeError(Error):
 
 class Cancelled(Error):
     def __init__(self, message):
-        super(GeometryConversionError).__init__(message)
+        super(Cancelled, self).__init__(message)
 
 class GUIDError(Error):
     def __init__(self, message, geometry):
