@@ -1,6 +1,7 @@
 from . import ui_functions as ui
 import json
 from error import HTTPError, AGOLServiceError, AGOLError, JSONDecodeError
+from tkinter import filedialog
 
 logging = ui.logging
 
@@ -90,7 +91,13 @@ def CreateNewSync(cfg):
             ImportSDE()
 
             #get details
-            sde_connect = raw_input('Enter path to .sde file:')
+            #sde_connect = raw_input('Enter path to .sde file:')
+            sde_connect = filedialog.askopenfilename(initialdir="/",
+                                                  title="Select .sde connect file",
+                                                  filetypes=(("SDE Files",
+                                                              "*.sde"),
+                                                             ("all files",
+                                                              "*.*")))
 
             try:
                 hostname, database = sde.GetServerFromSDE(sde_connect)
