@@ -4,5 +4,7 @@ syncs.json
 *.pyc
 *.log
 
+config/*
+
 json_logs/*
 .idea

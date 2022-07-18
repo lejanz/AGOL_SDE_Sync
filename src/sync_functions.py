@@ -1,7 +1,8 @@
 from . import ui_functions as ui
 import json
 from error import HTTPError, AGOLServiceError, AGOLError, JSONDecodeError
-from tkinter import filedialog
+from  Tkinter import *
+import tkFileDialog
 
 logging = ui.logging
 
@@ -88,11 +89,13 @@ def CreateNewSync(cfg):
         elif(serviceType == 1):
             #for SDE services
 
+            print('Selecting .sde file...')
+
             ImportSDE()
 
             #get details
             #sde_connect = raw_input('Enter path to .sde file:')
-            sde_connect = filedialog.askopenfilename(initialdir="/",
+            sde_connect = tkFileDialog.askopenfilename(initialdir="N:\GIS_Data\_SDE_Connects",
                                                   title="Select .sde connect file",
                                                   filetypes=(("SDE Files",
                                                               "*.sde"),
@@ -104,6 +107,8 @@ def CreateNewSync(cfg):
             except Exception as e:
                 print("Unable to open .sde file")
                 continue
+
+            logging.info("Chose '{}'".format(sde_connect))
             
             #hostname = raw_input('Enter SDE hostname (i.e. inpredwgis2):')
             #database = raw_input('Enter SDE database name (i.e. redw):')
