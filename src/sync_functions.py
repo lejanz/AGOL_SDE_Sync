@@ -76,11 +76,15 @@ def CreateNewSync(cfg):
     while(i < 2): 
         print('\nEnter the details for your {} service:\n').format(numbers[i])
 
-        types = ['SDE', 'AGOL']
+        types = ['SDE', 'AGOL', 'Cancel']
 
         serviceType = ui.Options('Select service type:', types)
 
-        if(serviceType == 1):
+        if(serviceType == 3):
+            print("Cancelling\n")
+            return False
+
+        elif(serviceType == 1):
             #for SDE services
 
             ImportSDE()
@@ -220,7 +224,7 @@ def ApplyEdits(service, cfg, deltas, sync_num, data=None):
 
         #ask to create backup first
         options = ['Yes', 'No']
-        choice = ui.Options('Would you like to make a backup of {} before coninuing?'.format(service['nickname']), options)
+        choice = ui.Options('Would you like to make a backup of {} before continuing?'.format(service['nickname']), options)
 
         backup = (choice == 1)
         

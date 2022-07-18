@@ -94,9 +94,10 @@ def main():
 
         if (choice == 1): #create new sync
             sync = sync_functions.CreateNewSync(cfg)
-            syncs.append(sync)
-            sync_functions.WriteSyncs(syncs)
-            logging.info('Sync "{}" created!'.format(sync['name']))
+            if(sync):
+                syncs.append(sync)
+                sync_functions.WriteSyncs(syncs)
+                logging.info('Sync "{}" created!'.format(sync['name']))
 
         elif (choice == 2): #delete sync
             
