@@ -11,6 +11,7 @@ import json
 import sys
 from src import ui_functions as ui
 from src import sync_functions
+import datetime
 
 logging = ui.logging
 # logging.basicConfig(
@@ -83,23 +84,40 @@ def main():
         syncNames = [s['name'] for s in syncs]
         
         #copy syncNames into menu so extras can be added
-        menu = syncNames[:]
-        menuExtras = ['Create new', 'Delete sync', 'Exit']
+        #menu = syncNames[:]
+        menu = ['Run SYNC', 'View SYNC details', 'Create SYNC', 'Delete SYNC', 'HELP', 'Exit']
 
         #add extras to beginning of menu
-        for index, extra in enumerate(menuExtras):
-            menu.insert(index, extra)
+        #for index, extra in enumerate(menuExtras):
+        #    menu.insert(index, extra)
         
-        choice = ui.Options('Select sync:', menu, allow_filter=True)
+        choice = ui.Options('Select an option:', menu, allow_filter=False)
 
-        if (choice == 1): #create new sync
+        if(choice == 1 or choice == 2 or choice == 4):
+            if(len(syncs) == 0):
+                print('No SYNCs set up!\n')
+                continue
+
+        if (choice == 2): #view sync details
+            choice = ui.Options('Choose a SYNC to view:', syncNames)
+            sync = syncs[choice-1]
+            print("Details of sync '{}':".format(sync['name']))
+            if('last_run' in sync.keys()):  #for backwards compatibility with old sync.json versions
+                print("Last run: {}".format(sync['last_run']))
+            print("First dataset:")
+            ui.PrintServiceDetails(sync['first'])
+            print("Second dataset:")
+            ui.PrintServiceDetails(sync['second'])
+            print('')
+
+        elif (choice == 3): #create new sync
             sync = sync_functions.CreateNewSync(cfg)
             if(sync):
                 syncs.append(sync)
                 sync_functions.WriteSyncs(syncs)
                 logging.info('Sync "{}" created!'.format(sync['name']))
 
-        elif (choice == 2): #delete sync
+        elif (choice == 4): #delete sync
             
             #add cancel option
             syncNames.append('Cancel')
@@ -126,12 +144,17 @@ def main():
          #   sync_num = GetSyncNum()
          #   BackupFeatureClass(sync_num)
          #   logging.info('Backup script completed.')
-            
-        elif (choice == 3): #exit
+
+        elif (choice == 4): #help
+            print('No help yet')  #TODO: make help page
+
+        elif (choice == 5): #exit
             logging.info('Exiting. HEHEHEHEHE')
             return  #ends function main()
             
         else:
+
+            choice = ui.Options('Choose a SYNC to run:', syncNames)
                              
             #print sync counter and date
             sync_num = GetSyncNum()
@@ -144,7 +167,7 @@ def main():
             sync_num_file.close()
 
             #get sync from syncs.json
-            choice = choice - (len(menuExtras) + 1)
+            choice = choice - 1   #index from 0 instead of 1
             sync = syncs[choice]
 
             logging.info('Executing sync "{}"...'.format(sync['name']))
@@ -201,6 +224,9 @@ def main():
                 logging.info('Updating servergen...')
                 syncs[choice]['first']['servergen'] = first_servergen
                 syncs[choice]['second']['servergen'] = second_servergen
+
+                #record time
+                syncs[choice]['last_run'] = str(datetime.now())
                 
                 sync_functions.WriteSyncs(syncs)
                 logging.info('Sync "{}" executed successfully!'.format(sync['name']))

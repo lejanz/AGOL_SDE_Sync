@@ -62,6 +62,20 @@ def Debug(message, messageLevel, indent=0):
 def Break():
     print('----------------------')
 
+def PrintServiceDetails(service):
+    print('  Type: {}'.format(service['type']))
+    print('  Nickname: {}'.format(service['nickname']))
+    if(service['type'] == 'AGOL'):
+        print('  AGOL URL: {}'.format(service['serviceUrl']))
+        print('  AGOL layer: {}'.format(service['layerId']))
+    else:
+        if('sde_connect' in service.keys()):
+            print('  SDE connect file: {}'.format(service['sde_connect']))
+        print('  SQL Server: {}'.format(service['hostname']))
+        print('  SDE featureclass: {}'.format(service['featureclass']))
+
+
+
 def Completed(attempt, attempted, completed):
     #prints number of attempted/successful adds, updates, or deletes. 
     
