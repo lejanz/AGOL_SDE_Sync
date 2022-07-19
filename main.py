@@ -145,10 +145,12 @@ def main():
          #   BackupFeatureClass(sync_num)
          #   logging.info('Backup script completed.')
 
-        elif (choice == 4): #help
-            print('No help yet')  #TODO: make help page
+        elif (choice == 5): #help
+            import os
+            print('Opening help page...\n')
+            os.system('START https://github.com/lejanz/AGOL_SDE_Sync#readme')
 
-        elif (choice == 5): #exit
+        elif (choice == 6): #exit
             logging.info('Exiting. HEHEHEHEHE')
             return  #ends function main()
             
