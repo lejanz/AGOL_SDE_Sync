@@ -69,16 +69,17 @@ def CreateNewSync(cfg):
 
     print('Ensure that the two datasets are identical. This tool may not function correctly otherwise.\n')
 
-    print('A SYNC consists of metadata about two datasets that are kept identical (synchronized) by applying updates,\n'
-          'inserts, and deletions from one to the other, and visa versa. The datasets can be a feature layer in a\n'
-          'AGOL feature service, or a feature class in a SDE enterprise geodatabase. The SYNC name should generally\n'
-          'be the same as the SDE feature class it is based on., and parenthesis can be used to help identify the\n'
-          'type of service and location. For example: "(SDE/GIS2-SDE/GIS1)" indicates the first dataset is located\n'
-          'in a SDE geodatabase on server GIS2, and the second is located on server GIS1 in SDE.\n')
+    print('A SYNC consists of metadata about two datasets that are kept identical (synchronized) by applying updates, '
+          'inserts, and deletions from one to the other, and visa versa. The datasets can be a feature layer in a '
+          'AGOL feature service, or a feature class in a SDE enterprise geodatabase. The SYNC name should generally '
+          'be the same as the SDE feature class it is based on., and parenthesis can be used to help identify the '
+          'type of service and location. For example: "(SDE/GIS2-SDE/GIS1)" indicates the parent dataset is located '
+          'in a SDE geodatabase on server GIS2, and the child is located on server GIS1 in SDE.\n')
 
     name = raw_input('ENTER a name for this SYNC:')
 
     numbers = ['first', 'second']
+    parent_child = ['parent', 'child']
 
     sync = {'name': name, 'first': {}, 'second': {}}
     
@@ -88,7 +89,7 @@ def CreateNewSync(cfg):
 
         types = ['SDE', 'AGOL', 'Back']
 
-        serviceType = ui.Options('Enter where your {} dataset is stored:'.format(numbers[i]), types)
+        serviceType = ui.Options('Enter where your {} dataset is stored:'.format(parent_child[i]), types)
 
         if(serviceType == 3):  #go back to start of this funtion
             return 'loop'
@@ -140,7 +141,7 @@ def CreateNewSync(cfg):
 
                 logging.info('Featureclass valid!')#, 1)
 
-                nickname = raw_input('Enter a nickname to track this FEATURE SERVICE (this is also used in conflict resolution).\n'
+                nickname = raw_input('Enter a nickname to track this FEATURE SERVICE (this is also used in conflict resolution). '
                                      'You may want to enter the storage location (AGOL or SDE) in parenthesis:')
 
                 service = {'servergen': {'stateId': stateId, 'globalIds': globalIds},
@@ -159,8 +160,8 @@ def CreateNewSync(cfg):
             
             #get service details
 
-            print('The URL for a AGOL hosted feature layer can be found at nps.mpas.arcgis.com for the layer properties,\n'
-                  'at the very bottom right under "URL". A list of common URLs can be found at https://blah.blah.blah .\n'
+            print('The URL for a AGOL hosted feature layer can be found at nps.mpas.arcgis.com for the layer properties, '
+                  'at the very bottom right under "URL". A list of common URLs can be found at https://blah.blah.blah . '
                   'The Service URL generally ends with "Feature Server"\n')
 
             url = raw_input('ENTER Service URL:')
@@ -200,7 +201,7 @@ def CreateNewSync(cfg):
 
             logging.info('Feature service valid!')#, 1)
 
-            nickname = raw_input('Enter a nickname to track this FEATURE SERVICE (this is also used in conflict resolution).\n'
+            nickname = raw_input('Enter a nickname to track this FEATURE SERVICE (this is also used in conflict resolution). '
                                  'You may want to enter the storage location (AGOL or SDE) in parenthesis:')
 
             service = {'type': 'AGOL',
