@@ -1,6 +1,6 @@
 from . import ui_functions as ui
 import json
-from error import HTTPError, AGOLServiceError, AGOLError, JSONDecodeError
+from error import HTTPError, AGOLServiceError, AGOLError, JSONDecodeError, Error
 from  Tkinter import *
 import tkFileDialog
 
@@ -85,8 +85,6 @@ def CreateNewSync(cfg):
     
     i = 0
     while(i < 2): 
-        print('\n')
-
         types = ['SDE', 'AGOL', 'Back']
 
         serviceType = ui.Options('Enter where your {} dataset is stored:'.format(parent_child[i]), types)
@@ -133,6 +131,8 @@ def CreateNewSync(cfg):
             if not connection:
                 continue
 
+            print('Validating SDE featureclass...')
+
             if(sde.CheckFeatureclass(connection, fcName)):
                 
                 #get current information
@@ -141,7 +141,7 @@ def CreateNewSync(cfg):
 
                 logging.info('Featureclass valid!')#, 1)
 
-                nickname = raw_input('Enter a nickname to track this FEATURE SERVICE (this is also used in conflict resolution). '
+                nickname = raw_input('\nEnter a nickname to track this FEATURE SERVICE (this is also used in conflict resolution).\n'
                                      'You may want to enter the storage location (AGOL or SDE) in parenthesis:')
 
                 service = {'servergen': {'stateId': stateId, 'globalIds': globalIds},
@@ -164,7 +164,7 @@ def CreateNewSync(cfg):
                   'at the very bottom right under "URL". A list of common URLs can be found at https://blah.blah.blah . '
                   'The Service URL generally ends with "Feature Server"\n')
 
-            url = raw_input('ENTER Service URL:')
+            url = raw_input('ENTER Service LAYER URL (system will verify next):')
             if(url.lower() == 'quit'):
                 continue
 
@@ -192,9 +192,11 @@ def CreateNewSync(cfg):
             #check that service is set up correctly
             token = agol.GetToken(cfg.AGOL_url, cfg.AGOL_username, cfg.AGOL_password)
 
+            print('Validating AGOL service...')
+
             try:
                 ready, serverGen, srid = agol.CheckService(url, layerId, token)
-            except (HTTPError, AGOLServiceError, AGOLError, JSONDecodeError) as e:
+            except (HTTPError, AGOLServiceError, AGOLError, JSONDecodeError, Error) as e:
                 logging.error('Error checking AGOL service!')
                 logging.error(e.message)
                 continue

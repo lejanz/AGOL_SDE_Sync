@@ -2,7 +2,7 @@ import json
 import requests
 from ui_functions import Debug, Completed, logging
 import time
-from error import HTTPError, AGOLError, AGOLServiceError, JSONDecodeError
+from error import HTTPError, AGOLError, AGOLServiceError, JSONDecodeError, Error
 
 def ParseJSON(jsn):                      #json.loads with error catching
     try:
@@ -129,7 +129,7 @@ def CheckService(base_url, layer, token): #, serverGen):
 
     if len(missing) > 0:                 #if any capabilities missing, raise exception
         missing = ','.join(missing)
-        raise AGOLError('Missing capability(s): {}'.format(missing), url)
+        raise Error('Missing capability(s): {}'.format(missing))
         #return False, None, None
 
     try:
