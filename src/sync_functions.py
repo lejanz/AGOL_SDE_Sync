@@ -141,7 +141,7 @@ def CreateNewSync(cfg):
                 logging.info('Featureclass valid!')#, 1)
 
                 nickname = raw_input('Enter a nickname to track this FEATURE SERVICE (this is also used in conflict resolution).\n'
-                                     'You may enter the storage location (AGOL or SDE) in parenthesis:')
+                                     'You may want to enter the storage location (AGOL or SDE) in parenthesis:')
 
                 service = {'servergen': {'stateId': stateId, 'globalIds': globalIds},
                            'type': 'SDE',
@@ -163,10 +163,19 @@ def CreateNewSync(cfg):
                   'at the very bottom right under "URL". A list of common URLs can be found at https://blah.blah.blah .\n'
                   'The Service URL generally ends with "Feature Server"\n')
 
-            url = raw_input('ENTER Service URL')
+            url = raw_input('ENTER Service URL:')
+            if(url.lower() == 'quit'):
+                continue
 
-            layerId = int(raw_input('\nA feature layer consists of one or more SERVICE LAYERS. The first service layer is layer 0.\n'
-                                    'Enter the SERVICE LAYER ID (usually 0). System will verify the service layer:'))
+            layerId = raw_input('\nA feature layer consists of one or more SERVICE LAYERS. The first service layer is layer 0.\n'
+                                    'Enter the SERVICE LAYER ID (usually 0). System will verify the service layer:')
+
+            try:
+                layerId = int(layerId)
+            except:
+                print('Please enter a number for the layer id!')
+                continue
+                
 
             print('')
 

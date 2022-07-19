@@ -11,7 +11,7 @@ import json
 import sys
 from src import ui_functions as ui
 from src import sync_functions
-import datetime
+from datetime import datetime
 
 logging = ui.logging
 # logging.basicConfig(
@@ -102,10 +102,11 @@ def main():
 
         if (choice == 2): #view sync details
             choice = ui.Options('Choose a SYNC to view:', syncNames, allow_filter=True)
+            choice -= 1
             if(choice == len(syncs)): #cancel option
                 continue
 
-            sync = syncs[choice-1]
+            sync = syncs[choice]
             ui.PrintSyncDetails(sync)
 
         elif (choice == 3): #create new sync
@@ -121,11 +122,12 @@ def main():
 
         elif (choice == 4): #delete sync
             deleteIndex = ui.Options('Choose sync to delete', syncNames, allow_filter=True)
+            deleteIndex -= 1
             
-            if deleteIndex == len(syncNames):  #if cancel is chosen
+            if deleteIndex == len(syncs):  #if cancel is chosen
                 continue
                 
-            nickname = syncs[deleteIndex-1]['name']
+            nickname = syncs[deleteIndex]['name']
 
             #ask to confirm
             menu = ['Continue', 'Cancel']
@@ -133,7 +135,7 @@ def main():
 
             if choice == 1:
                 #remove sync
-                syncs.pop(deleteIndex - 1)
+                syncs.pop(deleteIndex)
                 #write updated syncs to json
                 sync_functions.WriteSyncs(syncs)
                 logging.info('Sync "{}" deleted.'.format(nickname))
@@ -162,6 +164,7 @@ def main():
         else:
 
             choice = ui.Options('Choose a SYNC to run:', syncNames, allow_filter=True)
+            choice -= 1
             if (choice == len(syncs)):  #cancel option
                 continue
                              
@@ -176,7 +179,6 @@ def main():
             sync_num_file.close()
 
             #get sync from syncs.json
-            choice = choice - 1   #index from 0 instead of 1
             sync = syncs[choice]
 
             logging.info('Executing sync "{}"...'.format(sync['name']))
