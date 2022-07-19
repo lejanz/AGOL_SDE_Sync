@@ -85,6 +85,7 @@ def CreateNewSync(cfg):
     sync = {'name': name, 'first': {}, 'second': {}}
     
     i = 0
+    print('')
     while(i < 2): 
         types = ['SDE', 'AGOL', 'Back']
 
