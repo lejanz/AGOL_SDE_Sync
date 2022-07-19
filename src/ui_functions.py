@@ -74,7 +74,15 @@ def PrintServiceDetails(service):
         print('  SQL Server: {}'.format(service['hostname']))
         print('  SDE featureclass: {}'.format(service['featureclass']))
 
-
+def PrintSyncDetails(sync):
+    print("Details of sync '{}':".format(sync['name']))
+    if ('last_run' in sync.keys()):  # for backwards compatibility with old sync.json versions
+        print("Last run: {}".format(sync['last_run']))
+    print("First dataset:")
+    PrintServiceDetails(sync['first'])
+    print("Second dataset:")
+    PrintServiceDetails(sync['second'])
+    print('')
 
 def Completed(attempt, attempted, completed):
     #prints number of attempted/successful adds, updates, or deletes. 

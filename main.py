@@ -66,7 +66,7 @@ def PrintEdits(deltas, first_service, second_service):
                                                                                         second_service['nickname']))
     return num_adds + num_updates + num_deletes
 
-def main(): 
+def main():
     logging.debug('-------------')
     logging.debug('Program start')
     #load config
@@ -77,6 +77,7 @@ def main():
 
     #load syncs
     syncs = sync_functions.LoadSyncs()
+    stuff = ["I'm sorry, Dave.", "I can't do that, Dave.", "What are you doing, Dave?", "Goodbye, Dave."]
 
     while True:
 
@@ -85,43 +86,41 @@ def main():
         
         #copy syncNames into menu so extras can be added
         #menu = syncNames[:]
-        menu = ['Run SYNC', 'View SYNC details', 'Create SYNC', 'Delete SYNC', 'HELP', 'Exit']
+        menu = ['Run SYNC', 'View SYNC', 'Create SYNC', 'Delete SYNC', 'HELP', 'Exit']
 
         #add extras to beginning of menu
         #for index, extra in enumerate(menuExtras):
         #    menu.insert(index, extra)
         
-        choice = ui.Options('Select an option:', menu, allow_filter=False)
+        choice = ui.Options('Select an option:', menu)
 
         if(choice == 1 or choice == 2 or choice == 4):
             if(len(syncs) == 0):
                 print('No SYNCs set up!\n')
                 continue
+            syncNames.append('Back')
 
         if (choice == 2): #view sync details
-            choice = ui.Options('Choose a SYNC to view:', syncNames)
+            choice = ui.Options('Choose a SYNC to view:', syncNames, allow_filter=True)
+            if(choice == len(syncs)): #cancel option
+                continue
+
             sync = syncs[choice-1]
-            print("Details of sync '{}':".format(sync['name']))
-            if('last_run' in sync.keys()):  #for backwards compatibility with old sync.json versions
-                print("Last run: {}".format(sync['last_run']))
-            print("First dataset:")
-            ui.PrintServiceDetails(sync['first'])
-            print("Second dataset:")
-            ui.PrintServiceDetails(sync['second'])
-            print('')
+            ui.PrintSyncDetails(sync)
 
         elif (choice == 3): #create new sync
-            sync = sync_functions.CreateNewSync(cfg)
+            sync = 'loop'
+            while(sync == 'loop'):
+                sync = sync_functions.CreateNewSync(cfg)
             if(sync):
                 syncs.append(sync)
                 sync_functions.WriteSyncs(syncs)
-                logging.info('Sync "{}" created!'.format(sync['name']))
+                logging.info('SYNC "{}" created!'.format(sync['name']))
+                print('')
+                ui.PrintSyncDetails(sync)
 
         elif (choice == 4): #delete sync
-            
-            #add cancel option
-            syncNames.append('Cancel')
-            deleteIndex = ui.Options('Choose sync to delete', syncNames)
+            deleteIndex = ui.Options('Choose sync to delete', syncNames, allow_filter=True)
             
             if deleteIndex == len(syncNames):  #if cancel is chosen
                 continue
@@ -151,12 +150,20 @@ def main():
             os.system('START https://github.com/lejanz/AGOL_SDE_Sync#readme')
 
         elif (choice == 6): #exit
-            logging.info('Exiting. HEHEHEHEHE')
-            return  #ends function main()
+            logging.info('')
+
+            print(stuff.pop(0))
+            print('')
+
+            if(len(stuff) == 0):
+                return  #ends function main()
+
             
         else:
 
-            choice = ui.Options('Choose a SYNC to run:', syncNames)
+            choice = ui.Options('Choose a SYNC to run:', syncNames, allow_filter=True)
+            if (choice == len(syncs)):  #cancel option
+                continue
                              
             #print sync counter and date
             sync_num = GetSyncNum()

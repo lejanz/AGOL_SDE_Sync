@@ -66,9 +66,17 @@ def ImportAGOL():
 def CreateNewSync(cfg):
     #UI to create a new sync
     logging.debug('Creating sync...')
-    print('Please ensure that the two copies you are setting up for sync are currently identical!\nThis tool may not function correctly otherwise!\n')
 
-    name = raw_input('Please enter a name for this sync:')
+    print('Ensure that the two datasets are identical. This tool may not function correctly otherwise.\n')
+
+    print('A SYNC consists of metadata about two datasets that are kept identical (synchronized) by applying updates,\n'
+          'inserts, and deletions from one to the other, and visa versa. The datasets can be a feature layer in a\n'
+          'AGOL feature service, or a feature class in a SDE enterprise geodatabase. The SYNC name should generally\n'
+          'be the same as the SDE feature class it is based on., and parenthesis can be used to help identify the\n'
+          'type of service and location. For example: "(SDE/GIS2-SDE/GIS1)" indicates the first dataset is located\n'
+          'in a SDE geodatabase on server GIS2, and the second is located on server GIS1 in SDE.\n')
+
+    name = raw_input('ENTER a name for this SYNC:')
 
     numbers = ['first', 'second']
 
@@ -76,15 +84,14 @@ def CreateNewSync(cfg):
     
     i = 0
     while(i < 2): 
-        print('\nEnter the details for your {} service:\n').format(numbers[i])
+        print('\n')
 
-        types = ['SDE', 'AGOL', 'Cancel']
+        types = ['SDE', 'AGOL', 'Back']
 
-        serviceType = ui.Options('Select service type:', types)
+        serviceType = ui.Options('Enter where your {} dataset is stored:'.format(numbers[i]), types)
 
-        if(serviceType == 3):
-            print("Cancelling\n")
-            return False
+        if(serviceType == 3):  #go back to start of this funtion
+            return 'loop'
 
         elif(serviceType == 1):
             #for SDE services
@@ -112,7 +119,10 @@ def CreateNewSync(cfg):
             
             #hostname = raw_input('Enter SDE hostname (i.e. inpredwgis2):')
             #database = raw_input('Enter SDE database name (i.e. redw):')
-            fcName = raw_input('Enter featureclass name:')
+            fcName = raw_input('Enter the name of the FEATURECLASS (system will verify it exists next):')
+
+            if fcName.lower() == 'quit':
+                continue
 
             print('')
 
@@ -130,7 +140,8 @@ def CreateNewSync(cfg):
 
                 logging.info('Featureclass valid!')#, 1)
 
-                nickname = raw_input('Enter a nickname for this feature service (used in conflict resolution):')
+                nickname = raw_input('Enter a nickname to track this FEATURE SERVICE (this is also used in conflict resolution).\n'
+                                     'You may enter the storage location (AGOL or SDE) in parenthesis:')
 
                 service = {'servergen': {'stateId': stateId, 'globalIds': globalIds},
                            'type': 'SDE',
@@ -147,8 +158,15 @@ def CreateNewSync(cfg):
             ImportAGOL()
             
             #get service details
-            url = raw_input('Enter service url:')
-            layerId = int(raw_input('Enter service layer id:'))
+
+            print('The URL for a AGOL hosted feature layer can be found at nps.mpas.arcgis.com for the layer properties,\n'
+                  'at the very bottom right under "URL". A list of common URLs can be found at https://blah.blah.blah .\n'
+                  'The Service URL generally ends with "Feature Server"\n')
+
+            url = raw_input('ENTER Service URL')
+
+            layerId = int(raw_input('\nA feature layer consists of one or more SERVICE LAYERS. The first service layer is layer 0.\n'
+                                    'Enter the SERVICE LAYER ID (usually 0). System will verify the service layer:'))
 
             print('')
 
@@ -164,7 +182,8 @@ def CreateNewSync(cfg):
 
             logging.info('Feature service valid!')#, 1)
 
-            nickname = raw_input('Enter a nickname for this feature service (used in conflict resolution):')
+            nickname = raw_input('Enter a nickname to track this FEATURE SERVICE (this is also used in conflict resolution).\n'
+                                 'You may want to enter the storage location (AGOL or SDE) in parenthesis:')
 
             service = {'type': 'AGOL',
                        'serviceUrl': url,
