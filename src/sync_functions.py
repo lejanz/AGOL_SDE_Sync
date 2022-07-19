@@ -69,11 +69,12 @@ def CreateNewSync(cfg):
 
     print('Ensure that the two datasets are identical. This tool may not function correctly otherwise.\n')
 
-    print('A SYNC consists of metadata about two datasets that are kept identical (synchronized) by applying updates, '
-          'inserts, and deletions from one to the other, and visa versa. The datasets can be a feature layer in a '
-          'AGOL feature service, or a feature class in a SDE enterprise geodatabase. The SYNC name should generally '
-          'be the same as the SDE feature class it is based on., and parenthesis can be used to help identify the '
-          'type of service and location. For example: "(SDE/GIS2-SDE/GIS1)" indicates the parent dataset is located '
+    print('A SYNC consists of metadata about two datasets that are kept identical (synchronized)\n'
+          'by applying updates, inserts, and deletions from one to the other, and visa versa. The\n'
+          'datasets can be a feature layer in a AGOL feature service, or a feature class in a SDE\n'
+          'enterprise geodatabase. The SYNC name should generally be the same as the SDE feature\n'
+          'class it is based on., and parenthesis can be used to help identify the type of service\n'
+          'and location. For example: "(SDE/GIS2-SDE/GIS1)" indicates the parent dataset is located\n'
           'in a SDE geodatabase on server GIS2, and the child is located on server GIS1 in SDE.\n')
 
     name = raw_input('ENTER a name for this SYNC:')
@@ -160,9 +161,9 @@ def CreateNewSync(cfg):
             
             #get service details
 
-            print('The URL for a AGOL hosted feature layer can be found at nps.mpas.arcgis.com for the layer properties, '
-                  'at the very bottom right under "URL". A list of common URLs can be found at https://blah.blah.blah . '
-                  'The Service URL generally ends with "Feature Server"\n')
+            print('The URL for a AGOL hosted feature layer can be found at nps.mpas.arcgis.com for the\n'
+                  'layer properties, at the very bottom right under "URL". A list of common URLs can be\n'
+                  'found at https://blah.blah.blah . The Service URL generally ends with "Feature Server"\n')
 
             url = raw_input('ENTER Service LAYER URL (system will verify next):')
             if(url.lower() == 'quit'):
