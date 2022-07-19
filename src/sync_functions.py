@@ -167,14 +167,23 @@ def CreateNewSync(cfg):
             if(url.lower() == 'quit'):
                 continue
 
-            layerId = raw_input('\nA feature layer consists of one or more SERVICE LAYERS. The first service layer is layer 0.\n'
-                                    'Enter the SERVICE LAYER ID (usually 0). System will verify the service layer:')
-
+            url = url.split('/')
             try:
-                layerId = int(layerId)
-            except:
-                print('Please enter a number for the layer id!')
+                layerId = int(url.pop())   #remove last part of url, check if it is an integer
+            except ValueError:
+                print('No layer ID found, make sure you have entered the LAYER URL!')
                 continue
+
+            url = '/'.join(url)
+
+            #layerId = raw_input('\nA feature layer consists of one or more SERVICE LAYERS. The first service layer is layer 0.\n'
+            #                        'Enter the SERVICE LAYER ID (usually 0). System will verify the service layer:')
+
+            #try:
+            #    layerId = int(layerId)
+            #except:
+            #    print('Please enter a number for the layer id!')
+            #    continue
                 
 
             print('')
