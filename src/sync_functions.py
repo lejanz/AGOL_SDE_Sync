@@ -164,7 +164,7 @@ def CreateNewSync(cfg):
 
             print('The URL for a AGOL hosted feature layer can be found at nps.mpas.arcgis.com for the\n'
                   'layer properties, at the very bottom right under "URL". A list of common URLs can be\n'
-                  'found at https://blah.blah.blah . The Service URL generally ends with "Feature Server"\n')
+                  'found at https://tinyurl.com/2p8jknkc . The Service URL generally ends with "Feature Server"\n')
 
             url = raw_input('ENTER Service LAYER URL (system will verify next):')
             if(url.lower() == 'quit'):
@@ -218,6 +218,57 @@ def CreateNewSync(cfg):
         i = i + 1
 
     return sync
+
+def ReregisterSync(sync, cfg):
+    for first_second in ['first', 'second']:
+        if service['type'] == 'AGOL':
+            # check that service is set up correctly
+            token = agol.GetToken(cfg.AGOL_url, cfg.AGOL_username, cfg.AGOL_password)
+
+            print('Validating AGOL service...')
+
+            url = sync[first_second]['serviceUrl']
+            layerId = sync[first_second]['layerId']
+
+            try:
+                ready, serverGen, srid = agol.CheckService(url, layerId, token)
+            except (HTTPError, AGOLServiceError, AGOLError, JSONDecodeError, Error) as e:
+                logging.error('Error checking AGOL service!')
+                logging.error(e.message)
+                return False
+
+            logging.info('Feature service valid!')  # , 1)
+
+            sync[first_second]['servergen'] = {'stateId': stateId, 'globalIds': globalIds}
+
+        else:
+
+            hostname = sync[first_second]['hostname']
+            database = sync[first_second]['database']
+
+            # check that featureclass exists in sde table registry
+            connection = sde.Connect(hostname, database, cfg.SQL_username, cfg.SQL_password)
+
+            if not connection:
+                continue
+
+            print('Validating SDE featureclass...')
+
+            if (sde.CheckFeatureclass(connection, fcName)):
+                # get current information
+                stateId = sde.GetCurrentStateId(connection)
+                globalIds = sde.GetGlobalIds(connection, fcName)
+
+                logging.info('Featureclass valid!')  # , 1)
+
+                sync[first_second]['servergen']
+
+            else:
+                return False
+
+    return sync
+
+
    
 
 #def BackupFeatureClass(sync_num):

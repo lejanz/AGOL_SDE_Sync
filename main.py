@@ -86,7 +86,14 @@ def main():
         
         #copy syncNames into menu so extras can be added
         #menu = syncNames[:]
-        menu = ['Run SYNC', 'View SYNC', 'Create SYNC', 'Delete SYNC', 'HELP', 'Exit']
+        menu = ['Run SYNC', 'View SYNC', 'Create SYNC', 'Re-register SYNC', 'Delete SYNC', 'HELP', 'Exit']
+        RUN_SYNC = 1
+        VIEW_SYNC = 2
+        CREATE_SYNC = 3
+        REREGISTER_SYNC = 4
+        DELETE_SYNC = 5
+        HELP = 6
+        EXIT = 7
 
         #add extras to beginning of menu
         #for index, extra in enumerate(menuExtras):
@@ -94,13 +101,13 @@ def main():
         
         choice = ui.Options('Select an option:', menu)
 
-        if(choice == 1 or choice == 2 or choice == 4):
+        if(choice in [RUN_SYNC, VIEW_SYNC, REREGISTER_SYNC, DELETE_SYNC]):
             if(len(syncs) == 0):
                 print('No SYNCs set up!\n')
                 continue
             syncNames.append('Back')
 
-        if (choice == 2): #view sync details
+        if (choice == VIEW_SYNC): #view sync details
             choice = ui.Options('Choose a SYNC to view:', syncNames, allow_filter=True)
             choice -= 1
             if(choice == len(syncs)): #cancel option
@@ -109,7 +116,7 @@ def main():
             sync = syncs[choice]
             ui.PrintSyncDetails(sync)
 
-        elif (choice == 3): #create new sync
+        elif (choice == CREATE_SYNC): #create new sync
             sync = 'loop'
             while(sync == 'loop'):
                 sync = sync_functions.CreateNewSync(cfg)
@@ -120,7 +127,22 @@ def main():
                 print('')
                 ui.PrintSyncDetails(sync)
 
-        elif (choice == 4): #delete sync
+        elif (choice == REREGISTER_SYNC):
+            choice = ui.Options('Choose a SYNC to re-register:', syncNames, allow_filter=True)
+            choice -= 1
+            if (choice == len(syncs)):  # cancel option
+                continue
+
+            sync = ReregisterSync(syncs[choice])
+
+            if sync:
+                syncs[choice] = sync
+                WriteSyncs(syncs)
+            else:
+                logging.info("Failed to re-register sync!")
+
+
+        elif (choice == DELETE_SYNC): #delete sync
             deleteIndex = ui.Options('Choose sync to delete', syncNames, allow_filter=True)
             deleteIndex -= 1
             
@@ -146,12 +168,13 @@ def main():
          #   BackupFeatureClass(sync_num)
          #   logging.info('Backup script completed.')
 
-        elif (choice == 5): #help
+        elif (choice == HELP): #help
             import os
             print('Opening help page...\n')
-            os.system('START https://github.com/lejanz/AGOL_SDE_Sync#readme')
+            os.system('START https://doimspp.sharepoint.com/:w:/r/sites/ext-nps-insidernsp/_layouts/15/Doc.aspx?'
+                      'sourcedoc=%7B9AA1B96F-0410-43FD-9DA1-A0871BEA142B%7D&file=LSync%20Help.docx&action=default&mobileredirect=true')
 
-        elif (choice == 6): #exit
+        elif (choice == EXIT): #exit
             logging.info('')
 
             print(stuff.pop(0))
@@ -161,7 +184,7 @@ def main():
                 return  #ends function main()
 
             
-        else:
+        elif(choice == RUN_SYNC):
 
             choice = ui.Options('Choose a SYNC to run:', syncNames, allow_filter=True)
             choice -= 1
