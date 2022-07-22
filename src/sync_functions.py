@@ -18,13 +18,14 @@ def LoadSyncs():
         syncs_file = open('config/syncs.json', 'r')
     except:
         logging.warning('No syncs.json file found!')
-        syncs = []
+        return []
 
     try:
         syncs = json.load(syncs_file)
     except:
         logging.error('Invalid sync file!')
-        syncs = []
+        syncs_file.close()
+        return []
 
     syncs_file.close()
     logging.debug('Syncs loaded.')#, 2, indent=4)
@@ -67,8 +68,6 @@ def CreateNewSync(cfg):
     #UI to create a new sync
     logging.debug('Creating sync...')
 
-    print('Ensure that the two datasets are identical. This tool may not function correctly otherwise.\n')
-
     print('A SYNC consists of metadata about two datasets that are kept identical (synchronized)\n'
           'by applying updates, inserts, and deletions from one to the other, and visa versa. The\n'
           'datasets can be a feature layer in a AGOL feature service, or a feature class in a SDE\n'
@@ -76,6 +75,8 @@ def CreateNewSync(cfg):
           'class it is based on., and parenthesis can be used to help identify the type of service\n'
           'and location. For example: "(SDE/GIS2-SDE/GIS1)" indicates the parent dataset is located\n'
           'in a SDE geodatabase on server GIS2, and the child is located on server GIS1 in SDE.\n')
+
+    print('Ensure that the two datasets are identical. This tool may not function correctly otherwise.\n')
 
     name = raw_input('ENTER a name for this SYNC:')
 
@@ -102,6 +103,7 @@ def CreateNewSync(cfg):
             ImportSDE()
 
             #get details
+            #sde_connect = ''
             #sde_connect = raw_input('Enter path to .sde file:')
             sde_connect = tkFileDialog.askopenfilename(initialdir="N:\GIS_Data\_SDE_Connects",
                                                   title="Select .sde connect file",
@@ -120,7 +122,9 @@ def CreateNewSync(cfg):
             
             #hostname = raw_input('Enter SDE hostname (i.e. inpredwgis2):')
             #database = raw_input('Enter SDE database name (i.e. redw):')
+
             fcName = raw_input('Enter the name of the FEATURECLASS (system will verify it exists next):')
+            fcName = fcName.strip()  #remove whitespace from ends
 
             if fcName.lower() == 'quit':
                 continue
@@ -135,11 +139,12 @@ def CreateNewSync(cfg):
 
             print('Validating SDE featureclass...')
 
-            if(sde.CheckFeatureclass(connection, fcName)):
-                
+            evwName = sde.CheckFeatureclass(connection, fcName)
+
+            if(evwName):
                 #get current information
                 stateId = sde.GetCurrentStateId(connection)
-                globalIds = sde.GetGlobalIds(connection, fcName)
+                globalIds = sde.GetGlobalIds(connection, evwName, fcName)
 
                 logging.info('Featureclass valid!')#, 1)
 
@@ -162,11 +167,16 @@ def CreateNewSync(cfg):
             
             #get service details
 
-            print('The URL for a AGOL hosted feature layer can be found at nps.mpas.arcgis.com for the\n'
-                  'layer properties, at the very bottom right under "URL". A list of common URLs can be\n'
-                  'found at https://tinyurl.com/2p8jknkc . The Service URL generally ends with "Feature Server"\n')
+            print('The URL for a AGOL hosted-feature-layer sublayer can be found at nps.maps.arcgis.com.\n'
+                  'Browse to the hosted feature layer (the URL to the service will end with "FeatureServer").\n'
+                  'Then click on one of the layers on the main page. At the bottom right, the URL for the\n'
+                  'sub layer will be displayed. The hosted-feature-layer sublayer URL in the lower right\n'
+                  'will end with "Feature Server/x, where x is the sub layer ID. A list of URLs for common\n'
+                  'layers can befound at "https://tinyurl.com/48kj9ccf".\n')
 
-            url = raw_input('ENTER Service LAYER URL (system will verify next):')
+            url = raw_input('ENTER URL for LAYER (sublayer for the service). It ends in a integer; system will verify on next step):')
+            url = url.strip()
+
             if(url.lower() == 'quit'):
                 continue
 
@@ -258,10 +268,12 @@ def ReregisterSync(sync, cfg):
 
             print('Validating SDE featureclass...')
 
-            if (sde.CheckFeatureclass(connection, fcName)):
+            evwName = sde.CheckFeatureclass(connection, fcName)
+
+            if (evwName):
                 # get current information
                 stateId = sde.GetCurrentStateId(connection)
-                globalIds = sde.GetGlobalIds(connection, fcName)
+                globalIds = sde.GetGlobalIds(connection, evwName, fcName)
 
                 logging.info('Featureclass valid!')  # , 1)
 
@@ -271,9 +283,6 @@ def ReregisterSync(sync, cfg):
                 return False
 
     return sync
-
-
-   
 
 #def BackupFeatureClass(sync_num):
 #    ImportSDE()

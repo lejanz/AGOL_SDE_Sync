@@ -130,7 +130,7 @@ def main():
             sync = syncs[sync_index]
             n = sync['name']
 
-            menu = ['Run {}'.format(n), 'View {}'.format(n), 'Re-register {}'.format(n), 'Delete {}'.format(n), 'Back']
+            menu = ['Run "{}"'.format(n), 'View "{}"'.format(n), 'Re-register "{}"'.format(n), 'Delete "{}"'.format(n), 'Back']
             RUN_SYNC = 1
             VIEW_SYNC = 2
             REREGISTER_SYNC = 3

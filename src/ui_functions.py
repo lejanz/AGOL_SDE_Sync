@@ -72,6 +72,7 @@ def PrintServiceDetails(service):
         if('sde_connect' in service.keys()):
             print('  SDE connect file: {}'.format(service['sde_connect']))
         print('  SQL Server: {}'.format(service['hostname']))
+        print('  SDE Database: {}'.format(service['database']))
         print('  SDE featureclass: {}'.format(service['featureclass']))
 
 def PrintSyncDetails(sync):

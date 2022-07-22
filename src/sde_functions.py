@@ -199,18 +199,19 @@ def GetRowcount(connection):    #gets number of rows affected by most recent que
         return -1
 
 def CheckFeatureclass(connection, fcName):
-    #Checks that featureclass has globalids and is registered as versioned
+    #Checks that featureclass has globalids and is registered as versioned, returns versioned view name
     
     logging.debug('Checking "{}"...'.format(fcName))#, 1)
     
     query = "SELECT imv_view_name FROM SDE_table_registry WHERE table_name = '{}'".format(fcName)
     data = ReadSQLWithDebug(query, connection)
-
-    print(data)
     
     if (len(data.index) < 1):
         logging.error("'{}' not found in SDE table registry. Check that it has been registered as versioned.\n".format(fcName))#, 1)
         return False
+
+    evwName = data['imv_view_name'][0]
+    logging.debug("Versioned view name: {}".format(evwName))
 
     query = "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '{}' AND COLUMN_NAME = 'GLOBALID'".format(fcName)
     data = ReadSQLWithDebug(query, connection)
@@ -220,7 +221,7 @@ def CheckFeatureclass(connection, fcName):
         return False
 
     logging.debug('Featureclass is valid.')#, 1, indent=4)
-    return True   
+    return evwName
 
 def GetCurrentStateId(connection):
     #returns current state id of DEFAULT version
@@ -270,13 +271,13 @@ def NoSRID(): #if SRID cannot be found, user will be asked to decide next step
     print('Cancelling.')
     return -1
 
-def GetSRID(connection, fcName):
+def GetSRID(connection, evwName, fc): #TODO remove fcName, just here to throw error for unchanged functions
     #gets SRID of featureclass
 
     logging.debug('Getting SRID...')#, 2)
 
 
-    query = "SELECT TOP 1 SHAPE.STSrid FROM {}_evw".format(fcName)
+    query = "SELECT TOP 1 SHAPE.STSrid FROM {}".format(evwName)
     response = ReadSQLWithDebug(query, connection)
 
     try:
@@ -287,35 +288,35 @@ def GetSRID(connection, fcName):
 
     return srid
 
-def GetGlobalIds(connection, fcName):
+def GetGlobalIds(connection, evwName, fc):  #TODO remove fcName, just here to throw error for unchanged functions
     #returns list of global ids existing in featureclass
     logging.debug('Getting SDE global IDs...')#, 2)
 
-    query = "SELECT GLOBALID FROM {}_evw".format(fcName)
+    query = "SELECT GLOBALID FROM {}".format(evwName)
     globalIds = ReadSQLWithDebug(query, connection)
 
     globalIdsList = globalIds.iloc[:, 0].tolist()
 
     #Debug(globalIdsList, 3)
 
-    logging.debug("{} global ID's aquired".format(len(globalIdsList)))#, 2, indent=4)
+    logging.debug("{} global ID's acquired".format(len(globalIdsList)))#, 2, indent=4)
 
     return globalIdsList
 
-def GetChanges(connection, fcName, stateId):
+def GetChanges(connection, evwName, stateId, fc):  #TODO remove fcName, just here to throw error for unchanged functions
     #returns rows from versioned view with state id > state
 
-    logging.debug('Getting changes from {} since state ID {}'.format(fcName, stateId))#, 2)
+    logging.debug('Getting changes from {} since state ID {}'.format(evwName, stateId))#, 2)
 
     currentStateId = GetCurrentStateId(connection)
 
     #get rows from adds table since lastState
-    query = "SELECT * FROM {}_evw WHERE SDE_STATE_ID > {} AND SDE_STATE_ID <= {}".format(fcName, stateId, currentStateId)
+    query = "SELECT * FROM {} WHERE SDE_STATE_ID > {} AND SDE_STATE_ID <= {}".format(evwName, stateId, currentStateId)
     adds = ReadSQLWithDebug(query, connection)
 
     if(len(adds.index) > 0 and 'shape' in adds.columns):
         #reaquire SHAPE column as WKT
-        query = "SELECT SHAPE.AsTextZM() FROM {}_evw WHERE SDE_STATE_ID > {} AND SDE_STATE_ID <= {}".format(fcName, stateId, currentStateId)
+        query = "SELECT SHAPE.AsTextZM() FROM {} WHERE SDE_STATE_ID > {} AND SDE_STATE_ID <= {}".format(evwName, stateId, currentStateId)
         shape = ReadSQLWithDebug(query, connection)
 
         
@@ -516,7 +517,7 @@ def EditTable(query, connection, expectedRowCount):
 
     return rowcount
 
-def Add(connection, fcName, dict_in):
+def Add(connection, evwName, dict_in, fc): #TODO remove fcName, just here to throw error for unchanged functions
     #add a feature to the versioned view of a featureclass
     keys = ','.join(dict_in.keys())
     values = ','.join(dict_in.values())
@@ -530,11 +531,11 @@ def Add(connection, fcName, dict_in):
 
     logging.info('Adding object {}'.format(globalId))#, 2, indent=4)
     
-    query = "INSERT INTO {}_evw ({}) VALUES ({});".format(fcName, keys, values) #TODO: make SRID variable
+    query = "INSERT INTO {} ({}) VALUES ({});".format(evwName, keys, values) #TODO: make SRID variable
     
     return EditTable(query, connection, 1)
 
-def Update(connection, fcName, dict_in):
+def Update(connection, evwName, dict_in, fc):
     #update a feature in the versioned view of a featureclass
 
     try:
@@ -555,17 +556,17 @@ def Update(connection, fcName, dict_in):
 
     data = ','.join(pairs)
 
-    query = "UPDATE {}_evw SET {} WHERE GLOBALID = {}".format(fcName, data, globalId) #TODO: make SRID variable
+    query = "UPDATE {} SET {} WHERE GLOBALID = {}".format(evwName, data, globalId) #TODO: make SRID variable
 
     return EditTable(query, connection, 1)
     
 
-def Delete(connection, fcName, GUID):
+def Delete(connection, evwName, GUID, fc):
     #remove feature from versioned view of featureclass
 
     logging.info("Deleting object '{}'".format(GUID))#, 2, indent=4)
     
-    query = "DELETE FROM  {}_evw WHERE GLOBALID = '{}'".format(fcName, GUID)
+    query = "DELETE FROM  {} WHERE GLOBALID = '{}'".format(evwName, GUID)
     
     return EditTable(query, connection, 1)
     
@@ -576,14 +577,16 @@ def ExtractChanges(service, cfg):#connection, fcName, lastGlobalIds, lastState, 
     connection = Connect(service['hostname'], service['database'], cfg.SQL_username, cfg.SQL_password)
 
     fcName = service['featureclass']
-    
-    #ensure featureclass is ready to go
-    if not (connection and CheckFeatureclass(connection, fcName)):
+
+    # ensure featureclass is ready to go
+    evwName = CheckFeatureclass(connection, fcName)
+
+    if not (connection and evwName):
         raise Exception('Failed to connect to SDE featureclass')
     
     #get featureclass data
     datatypes = GetDatatypes(connection, fcName)   
-    srid = GetSRID(connection, fcName)
+    srid = GetSRID(connection, evwName, fcName)
 
     if srid == -1:
         raise Exception('Failed to acquire SRID')
@@ -593,8 +596,8 @@ def ExtractChanges(service, cfg):#connection, fcName, lastGlobalIds, lastState, 
     lastState = service['servergen']['stateId']
     
     #get global ids and changes from versioned view
-    globalIds = GetGlobalIds(connection, fcName)
-    changes = GetChanges(connection, fcName, lastState)
+    globalIds = GetGlobalIds(connection, evwName, fcName)
+    changes = GetChanges(connection, evwName, lastState, fcName)
     
     #extrapolate updates and deletes
     logging.info('Processing changes...')#, 2)
@@ -620,7 +623,7 @@ def ExtractChanges(service, cfg):#connection, fcName, lastGlobalIds, lastState, 
 
     deltas = {"adds": adds_json, "updates": updates_json, "deleteIds": deleteIds}
     
-    data = {'connection': connection, 'datatypes': datatypes} 
+    data = {'connection': connection, 'datatypes': datatypes, 'evwName': evwName}
     
     logging.info('SDE change extraction complete.')#, 0)
     
@@ -642,12 +645,14 @@ def ApplyEdits(service, cfg, deltas, sync_num, backup, data=None): #connection, 
     #get connection data
     if data == None:
         connection = Connect(service['hostname'], service['database'], cfg.SQL_username, cfg.SQL_password)
-        if not (connection and CheckFeatureclass(connection, service['featureclass'])):
+        evwName = CheckFeatureclass(connection, service['featureclass'])
+        if not (connection and evwName):
             return False
         datatypes = GetDatatypes(connection, service['featureclass'])
     else:
         connection = data['connection']
         datatypes = data['datatypes']
+        evwName = data['evwName']
 
     if backup:
         BackupFeatureClass(service, sync_num)
@@ -658,7 +663,7 @@ def ApplyEdits(service, cfg, deltas, sync_num, backup, data=None): #connection, 
 
     #redefine adds and updates based on current data to avoid errors/conflicts
     addsUpdates = deltas["adds"] + deltas["updates"]
-    globalIds = GetGlobalIds(connection, fcName)
+    globalIds = GetGlobalIds(connection, evwName, fcName)
 
     adds = []
     updates = []
@@ -689,7 +694,7 @@ def ApplyEdits(service, cfg, deltas, sync_num, backup, data=None): #connection, 
     
     for add in adds:
         try: 
-            rowcount = Add(connection, fcName, add)
+            rowcount = Add(connection, evwName, add, fcName)
         except Exception as e:
             if(AskToCancel(e)):
                 raise
@@ -700,7 +705,7 @@ def ApplyEdits(service, cfg, deltas, sync_num, backup, data=None): #connection, 
 
     for update in updates:
         try: 
-            rowcount = Update(connection, fcName, update)
+            rowcount = Update(connection, evwName, update, evwName)
         except Exception as e:
             if(AskToCancel(e)):
                 raise
@@ -711,7 +716,7 @@ def ApplyEdits(service, cfg, deltas, sync_num, backup, data=None): #connection, 
 
     for GUID in deleteGUIDs:
         try: 
-            rowcount = Delete(connection, fcName, GUID)
+            rowcount = Delete(connection, evwName, GUID, evwName)
         except Exception as e:
             if(AskToCancel(e)):
                 raise
@@ -739,21 +744,11 @@ def ApplyEdits(service, cfg, deltas, sync_num, backup, data=None): #connection, 
 
     #get new state id and global ids
     state_id = GetCurrentStateId(connection)
-    globalIds = GetGlobalIds(connection, service['featureclass'])
+    globalIds = GetGlobalIds(connection, evwName, fcName)
 
     #close connection
     connection.close()
 
     return {'stateId': state_id, 'globalIds': globalIds}
-
-
-#connection = Connect('inpredwgis2', 'REDWTest', 'REDW_Python', 'Benefit4u!123')
-#GetRowcount(connection)
-#GetCurrentStateId(connection)
-#GetGlobalIds(connection, 'AGOL_TEST_PY_2')
-#SqlToJson(GetChanges(connection, 'AGOL_TEST_PY_2', 0), GetDatatypes(connection, 'AGOL_TEST_PY_2'))
-#print(GetSRID(connection, 'AGOL_TEST_PY_2'))
-#datatypes = GetDatatypes(connection, 'AGOL_TEST_PY_2')
-#print datatypes[datatypes['DATA_TYPE'].str.contains('datetime')]['COLUMN_NAME'].tolist()
 
 
