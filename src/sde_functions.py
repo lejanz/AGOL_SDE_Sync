@@ -203,8 +203,10 @@ def CheckFeatureclass(connection, fcName):
     
     logging.debug('Checking "{}"...'.format(fcName))#, 1)
     
-    query = "SELECT registration_id FROM SDE_table_registry WHERE table_name = '{}'".format(fcName)
+    query = "SELECT imv_view_name FROM SDE_table_registry WHERE table_name = '{}'".format(fcName)
     data = ReadSQLWithDebug(query, connection)
+
+    print(data)
     
     if (len(data.index) < 1):
         logging.error("'{}' not found in SDE table registry. Check that it has been registered as versioned.\n".format(fcName))#, 1)
@@ -281,7 +283,7 @@ def GetSRID(connection, fcName):
         srid = int(response.iloc[0])
     except:
         srid = NoSRID()
-    logging.debug('SRID aquired. SRID = {}'.format(srid))#, 2, indent=4)
+    logging.debug('SRID acquired. SRID = {}'.format(srid))#, 2, indent=4)
 
     return srid
 
