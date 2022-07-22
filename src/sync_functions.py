@@ -221,7 +221,9 @@ def CreateNewSync(cfg):
 
 def ReregisterSync(sync, cfg):
     for first_second in ['first', 'second']:
-        if service['type'] == 'AGOL':
+        if sync[first_second]['type'] == 'AGOL':
+            ImportAGOL()
+            
             # check that service is set up correctly
             token = agol.GetToken(cfg.AGOL_url, cfg.AGOL_username, cfg.AGOL_password)
 
@@ -242,9 +244,11 @@ def ReregisterSync(sync, cfg):
             sync[first_second]['servergen'] = {'stateId': stateId, 'globalIds': globalIds}
 
         else:
-
+            ImportSDE()
+            
             hostname = sync[first_second]['hostname']
             database = sync[first_second]['database']
+            fcName = sync[first_second]['featureclass']
 
             # check that featureclass exists in sde table registry
             connection = sde.Connect(hostname, database, cfg.SQL_username, cfg.SQL_password)

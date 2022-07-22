@@ -133,13 +133,16 @@ def main():
             if (choice == len(syncs)):  # cancel option
                 continue
 
-            sync = ReregisterSync(syncs[choice])
+            sync = sync_functions.ReregisterSync(syncs[choice], cfg)
 
             if sync:
                 syncs[choice] = sync
-                WriteSyncs(syncs)
+                sync_functions.WriteSyncs(syncs)
+                print('Sync "{}" re-registered successfuly!\n'.format(sync['name']))
             else:
                 logging.info("Failed to re-register sync!")
+
+            
 
 
         elif (choice == DELETE_SYNC): #delete sync
