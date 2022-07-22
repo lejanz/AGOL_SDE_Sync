@@ -251,7 +251,7 @@ def ReregisterSync(sync, cfg):
 
             logging.info('Feature service valid!')  # , 1)
 
-            sync[first_second]['servergen'] = {'stateId': stateId, 'globalIds': globalIds}
+            sync[first_second]['servergen'] = serverGen
 
         else:
             ImportSDE()
@@ -277,7 +277,7 @@ def ReregisterSync(sync, cfg):
 
                 logging.info('Featureclass valid!')  # , 1)
 
-                sync[first_second]['servergen']
+                sync[first_second]['servergen'] = {'stateId': stateId, 'globalIds': globalIds}
 
             else:
                 return False
