@@ -143,14 +143,19 @@ def main():
                 ui.PrintSyncDetails(sync)
 
             elif (choice == REREGISTER_SYNC):
-                sync = sync_functions.ReregisterSync(sync, cfg)
+                # ask to confirm
+                print('Re-register ONLY if you are sure that your two datasets are currently IDENTICAL!\n')
+                menu = ['Continue', 'Cancel']
+                choice = ui.Options('Re-registering sync "{}". Continue?'.format(sync['name']), menu)
 
-                if sync:
-                    syncs[sync_index] = sync
-                    sync_functions.WriteSyncs(syncs)
-                    print('Sync "{}" re-registered successfuly!\n'.format(sync['name']))
-                else:
-                    logging.info("Failed to re-register sync!")
+                if choice == 1:
+                    sync = sync_functions.ReregisterSync(sync, cfg)
+                    if sync:
+                        syncs[sync_index] = sync
+                        sync_functions.WriteSyncs(syncs)
+                        print('Sync "{}" re-registered successfuly!\n'.format(sync['name']))
+                    else:
+                        logging.info("Failed to re-register sync!")
 
 
             elif (choice == DELETE_SYNC):  # delete sync
