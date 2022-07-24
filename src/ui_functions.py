@@ -62,6 +62,42 @@ def Debug(message, messageLevel, indent=0):
 def Break():
     print('----------------------')
 
+def GetName():
+    name = raw_input('ENTER a name for this SYNC:')
+    return name
+
+def GetAgolURL():
+    url = raw_input('ENTER URL for LAYER (sublayer for the service). It ends in a integer; system will verify on next step):')
+    url = url.strip()
+
+    if (url.lower() == 'quit'):
+        return False, False
+
+    url = url.split('/')
+    try:
+        layerId = int(url.pop())  # remove last part of url, check if it is an integer
+    except ValueError:
+        print('No layer ID found, make sure you have entered the LAYER URL!')
+        return False, False
+
+    url = '/'.join(url)
+
+    return url, layerId
+
+def GetNickname():
+    nickname = raw_input(
+        '\nEnter a nickname to track this FEATURE SERVICE (this is also used in conflict resolution).\n'
+        'You may want to enter the storage location (AGOL or SDE) in parenthesis:')
+    return nickname
+
+def GetFcName():
+    fcName = raw_input('Enter the name of the FEATURECLASS (system will verify it exists next):')
+    fcName = fcName.strip()  # remove whitespace from ends
+
+    if fcName.lower() == 'quit':
+        return False
+
+
 def PrintServiceDetails(service):
     print('  Type: {}'.format(service['type']))
     print('  Nickname: {}'.format(service['nickname']))
@@ -76,12 +112,12 @@ def PrintServiceDetails(service):
         print('  SDE featureclass: {}'.format(service['featureclass']))
 
 def PrintSyncDetails(sync):
-    print("Details of sync '{}':".format(sync['name']))
+    print('Details of sync "{}":'.format(sync['name']))
     if ('last_run' in sync.keys()):  # for backwards compatibility with old sync.json versions
         print("Last run: {}".format(sync['last_run']))
-    print("First dataset:")
+    print("Parent dataset:")
     PrintServiceDetails(sync['first'])
-    print("Second dataset:")
+    print("Child dataset:")
     PrintServiceDetails(sync['second'])
     print('')
 

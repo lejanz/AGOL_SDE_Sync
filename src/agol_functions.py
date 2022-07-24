@@ -189,7 +189,6 @@ def Backup(base_url, username, serviceId, token, layerId):
     logging.info('Exported backup can be found in the content folder for {}, or at the following URL:'.format(username))
     logging.info(exportUrl)
 
-    
 def ExtractChanges(service, cfg):
     #extracts changes since specified serverGen and returns them as an object
     

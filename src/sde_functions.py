@@ -303,6 +303,12 @@ def GetGlobalIds(connection, evwName, fc):  #TODO remove fcName, just here to th
 
     return globalIdsList
 
+def GetServergen(connection, evwName):
+    stateId = GetCurrentStateId(connection)
+    globalIds = GetGlobalIds(connection, evwName, evwName)
+
+    return {'stateId': stateId, 'globalIds': globalIds}
+
 def GetChanges(connection, evwName, stateId, fc):  #TODO remove fcName, just here to throw error for unchanged functions
     #returns rows from versioned view with state id > state
 
@@ -569,7 +575,6 @@ def Delete(connection, evwName, GUID, fc):
     query = "DELETE FROM  {} WHERE GLOBALID = '{}'".format(evwName, GUID)
     
     return EditTable(query, connection, 1)
-    
 
 def ExtractChanges(service, cfg):#connection, fcName, lastGlobalIds, lastState, datatypes):
     #returns object lists for adds and updates, and list of objects deleted

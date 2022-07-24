@@ -64,6 +64,157 @@ def ImportAGOL():
         from src import agol_functions as agol
         logging.debug('AGOL functions loaded.')#, 2, indent=4)
 
+def GetSdeFilepath():
+    print('Selecting .sde file...')
+
+    sde_connect = tkFileDialog.askopenfilename(initialdir="N:\GIS_Data\_SDE_Connects", title="Select .sde connect file", filetypes=(("SDE Files", "*.sde"),("all files","*.*")))
+
+    try:
+        hostname, database = sde.GetServerFromSDE(sde_connect)
+    except Exception as e:
+        print("Unable to open .sde file")
+        return False, False, False
+
+    logging.info("Chose '{}'".format(sde_connect))
+
+    return sde_connect, hostname, database
+
+def ValidateService(service, cfg):
+    #checks that service is valid, returns serverGen if so
+    if service['type'] == 'SDE':
+        ImportSDE()
+
+        # check that featureclass exists in sde table registry
+        print('Validating SDE featureclass...')
+
+        hostname = service['hostname']
+        database = service['database']
+        fcName = service['featureclass']
+
+        connection = sde.Connect(hostname, database, cfg.SQL_username, cfg.SQL_password)
+
+        if not connection:
+            return False
+
+        evwName = sde.CheckFeatureclass(connection, fcName)
+
+        if (evwName):
+            # get current information
+            serverGen = sde.GetServergen(connection, evwName)
+
+            logging.info('Featureclass valid!')  # , 1)
+        else:
+            logging.error('Featureclass validation failed.')
+            return False
+
+        return serverGen
+
+    elif service['type'] == 'AGOL':
+        ImportAGOL()
+
+        # check that service is set up correctly
+        token = agol.GetToken(cfg.AGOL_url, cfg.AGOL_username, cfg.AGOL_password)
+
+        url = service['serviceUrl']
+        layerId = service['layerId']
+
+        print('Validating AGOL service...')
+
+        try:
+            ready, serverGen, srid = agol.CheckService(url, layerId, token)
+        except (HTTPError, AGOLServiceError, AGOLError, JSONDecodeError, Error) as e:
+            logging.error('Error checking AGOL service!')
+            logging.error(e.message)
+            return False
+
+        logging.info('Feature service layer valid!')
+
+        return serverGen
+
+def CreateNewService(cfg, pc):
+    types = ['SDE', 'AGOL', 'Back']
+    parent_child = ['parent', 'child']
+
+    serviceType = ui.Options('Enter where your {} dataset is stored:'.format(parent_child[pc]), types)
+    SDE = 1
+    AGOL = 2
+    BACK = 3
+
+    if (serviceType == BACK):  # go back to start of this funtion
+        return 'loop'
+
+    elif (serviceType == SDE):
+        # for SDE services
+        ImportSDE()
+
+        sde_connect, hostname, database = GetSdeFilepath()
+        if not sde_connect:
+            return False
+
+        #hostname = raw_input('Enter SDE hostname (i.e. inpredwgis2):')
+        #database = raw_input('Enter SDE database name (i.e. redw):')
+
+        fcName = ui.GetFcName()
+        if not fcName:
+            return False
+
+        print('')
+
+        service = {'type': 'SDE',
+                   'featureclass': fcName,
+                   'sde_connect': sde_connect,
+                   'hostname': hostname,
+                   'database': database}
+
+    elif serviceType == AGOL:
+        # for AGOL services
+        ImportAGOL()
+
+        # get service details
+
+        print('The URL for a AGOL hosted-feature-layer sublayer can be found at nps.maps.arcgis.com.\n'
+              'Browse to the hosted feature layer (the URL to the service will end with "FeatureServer").\n'
+              'Then click on one of the layers on the main page. At the bottom right, the URL for the\n'
+              'sub layer will be displayed. The hosted-feature-layer sublayer URL in the lower right\n'
+              'will end with "Feature Server/x, where x is the sub layer ID. A list of URLs for common\n'
+              'layers can befound at "https://tinyurl.com/48kj9ccf".\n')
+
+        url, layerId = ui.GetAgolURL()
+
+        if not url:
+            return False
+
+        # layerId = raw_input('\nA feature layer consists of one or more SERVICE LAYERS. The first service layer is layer 0.\n'
+        #                        'Enter the SERVICE LAYER ID (usually 0). System will verify the service layer:')
+
+        # try:
+        #    layerId = int(layerId)
+        # except:
+        #    print('Please enter a number for the layer id!')
+        #    continue
+
+        print('')
+
+        service = {'type': 'AGOL',
+                   'serviceUrl': url,
+                   'layerId': layerId}
+
+        # endif
+
+    serverGen = ValidateService(service, cfg)
+
+    if (serverGen):
+        nickname = ui.GetNickname()
+
+        service['servergen'] = serverGen
+        service['nickname'] = nickname
+
+        return service
+
+    else:
+        # invalid service
+        return False
+
 def CreateNewSync(cfg):
     #UI to create a new sync
     logging.debug('Creating sync...')
@@ -78,215 +229,139 @@ def CreateNewSync(cfg):
 
     print('Ensure that the two datasets are identical. This tool may not function correctly otherwise.\n')
 
-    name = raw_input('ENTER a name for this SYNC:')
+    name = ui.GetName()
 
     numbers = ['first', 'second']
-    parent_child = ['parent', 'child']
 
     sync = {'name': name, 'first': {}, 'second': {}}
     
     i = 0
-    print('')
-    while(i < 2): 
-        types = ['SDE', 'AGOL', 'Back']
 
-        serviceType = ui.Options('Enter where your {} dataset is stored:'.format(parent_child[i]), types)
+    while(i < 2):
+        print('')
+        service = CreateNewService(cfg, i)
+        if service:
+            if service == 'loop':
+                return service
 
-        if(serviceType == 3):  #go back to start of this funtion
-            return 'loop'
-
-        elif(serviceType == 1):
-            #for SDE services
-
-            print('Selecting .sde file...')
-
-            ImportSDE()
-
-            #get details
-            #sde_connect = ''
-            #sde_connect = raw_input('Enter path to .sde file:')
-            sde_connect = tkFileDialog.askopenfilename(initialdir="N:\GIS_Data\_SDE_Connects",
-                                                  title="Select .sde connect file",
-                                                  filetypes=(("SDE Files",
-                                                              "*.sde"),
-                                                             ("all files",
-                                                              "*.*")))
-
-            try:
-                hostname, database = sde.GetServerFromSDE(sde_connect)
-            except Exception as e:
-                print("Unable to open .sde file")
-                continue
-
-            logging.info("Chose '{}'".format(sde_connect))
-            
-            #hostname = raw_input('Enter SDE hostname (i.e. inpredwgis2):')
-            #database = raw_input('Enter SDE database name (i.e. redw):')
-
-            fcName = raw_input('Enter the name of the FEATURECLASS (system will verify it exists next):')
-            fcName = fcName.strip()  #remove whitespace from ends
-
-            if fcName.lower() == 'quit':
-                continue
-
-            print('')
-
-            #check that featureclass exists in sde table registry 
-            connection = sde.Connect(hostname, database, cfg.SQL_username, cfg.SQL_password)
-
-            if not connection:
-                continue
-
-            print('Validating SDE featureclass...')
-
-            evwName = sde.CheckFeatureclass(connection, fcName)
-
-            if(evwName):
-                #get current information
-                stateId = sde.GetCurrentStateId(connection)
-                globalIds = sde.GetGlobalIds(connection, evwName, fcName)
-
-                logging.info('Featureclass valid!')#, 1)
-
-                nickname = raw_input('\nEnter a nickname to track this FEATURE SERVICE (this is also used in conflict resolution).\n'
-                                     'You may want to enter the storage location (AGOL or SDE) in parenthesis:')
-
-                service = {'servergen': {'stateId': stateId, 'globalIds': globalIds},
-                           'type': 'SDE',
-                           'featureclass': fcName,
-                           'sde_connect': sde_connect,
-                           'hostname': hostname,
-                           'database': database,
-                           'nickname': nickname}
-            else:
-                continue
-            
+            sync[numbers[i]] = service
+            i = i + 1
         else:
-            #for AGOL services
-            ImportAGOL()
-            
-            #get service details
-
-            print('The URL for a AGOL hosted-feature-layer sublayer can be found at nps.maps.arcgis.com.\n'
-                  'Browse to the hosted feature layer (the URL to the service will end with "FeatureServer").\n'
-                  'Then click on one of the layers on the main page. At the bottom right, the URL for the\n'
-                  'sub layer will be displayed. The hosted-feature-layer sublayer URL in the lower right\n'
-                  'will end with "Feature Server/x, where x is the sub layer ID. A list of URLs for common\n'
-                  'layers can befound at "https://tinyurl.com/48kj9ccf".\n')
-
-            url = raw_input('ENTER URL for LAYER (sublayer for the service). It ends in a integer; system will verify on next step):')
-            url = url.strip()
-
-            if(url.lower() == 'quit'):
-                continue
-
-            url = url.split('/')
-            try:
-                layerId = int(url.pop())   #remove last part of url, check if it is an integer
-            except ValueError:
-                print('No layer ID found, make sure you have entered the LAYER URL!')
-                continue
-
-            url = '/'.join(url)
-
-            #layerId = raw_input('\nA feature layer consists of one or more SERVICE LAYERS. The first service layer is layer 0.\n'
-            #                        'Enter the SERVICE LAYER ID (usually 0). System will verify the service layer:')
-
-            #try:
-            #    layerId = int(layerId)
-            #except:
-            #    print('Please enter a number for the layer id!')
-            #    continue
-                
-
-            print('')
-
-            #check that service is set up correctly
-            token = agol.GetToken(cfg.AGOL_url, cfg.AGOL_username, cfg.AGOL_password)
-
-            print('Validating AGOL service...')
-
-            try:
-                ready, serverGen, srid = agol.CheckService(url, layerId, token)
-            except (HTTPError, AGOLServiceError, AGOLError, JSONDecodeError, Error) as e:
-                logging.error('Error checking AGOL service!')
-                logging.error(e.message)
-                continue
-
-            logging.info('Feature service valid!')#, 1)
-
-            nickname = raw_input('Enter a nickname to track this FEATURE SERVICE (this is also used in conflict resolution). '
-                                 'You may want to enter the storage location (AGOL or SDE) in parenthesis:')
-
-            service = {'type': 'AGOL',
-                       'serviceUrl': url,
-                       'layerId': layerId,
-                       'servergen': serverGen,
-                       'nickname': nickname}
-
-        sync[numbers[i]] = service
-        i = i + 1
+            #failed to create service
+            continue
 
     return sync
+
+def EditSync(sync, cfg):
+    logging.info('Editing sync "{}"...'.format(sync['name']))
+    ui.PrintSyncDetails(sync)
+
+    while(True):
+        menu = ['Name', 'Parent dataset', 'Child dataset', 'Done', 'Cancel']
+        NAME = 1
+        PARENT_DATASET = 2
+        CHILD_DATASET = 3
+        DONE = 4
+        CANCEL = 5
+
+        choice = ui.Options('Choose an option to edit:', menu)
+
+        if(choice == NAME):
+            sync['name'] = ui.GetName()
+
+        elif(choice == DONE):
+            ui.PrintSyncDetails(sync)
+            return sync
+
+        elif(choice == CANCEL):
+            return False
+
+        else:
+            if(choice == PARENT_DATASET):
+                first_second = 'first'
+                i = 1
+            elif(choice == CHILD_DATASET):
+                first_second = 'second'
+                i = 2
+
+            while True:
+                service = sync[first_second]
+                TYPE = 1
+                NICKNAME = 2
+
+                if(service['type'] == 'AGOL'):
+                    ImportAGOL()
+
+                    menu = ['Type', 'Nickname', 'URL', 'Done', 'Back']
+                    URL = 3
+                    DONE = 4
+                    BACK = 5
+
+                    choice = ui.Options('What would you like to edit in "{}"'.format(service['nickname']), menu)
+
+                    if(choice == URL):
+                        url, layerId = ui.GetAgolURL()
+                        if not url:
+                            continue
+                        service['serviceUrl'] = url
+                        service['layerId'] = layerId
+
+                elif(service['type'] == 'SDE'):
+                    ImportSDE()
+
+                    menu = ['Type', 'Nickname', 'SDE Connection', 'Featureclass', 'Done', 'Back']
+                    SDE_CONNECT = 3
+                    FEATURECLASS = 4
+                    DONE = 5
+                    BACK = 6
+
+                    choice = ui.Options('What would you like to edit in "{}"'.format(service['nickname']), menu)
+
+                    if(choice == SDE_CONNECT):
+                        sde_connect, hostname, database = GetSdeFilepath()
+                        if not sde_connect:
+                            continue
+
+                        service['sde_connect'] = sde_connect
+                        service['hostname'] = hostname
+                        service['database'] = database
+
+                    elif(choice == FEATURECLASS):
+                        fcName = ui.GetFcName()
+                        if not fcName:
+                            continue
+
+                        service[fcName] = fcName
+
+                if (choice == TYPE):
+                    #create a whole new service
+                    service = CreateNewService(cfg, i)
+                    if (service == False):
+                        continue
+                    elif (service == 'loop'):
+                        break
+
+                elif (choice == NICKNAME):
+                    nickname = ui.GetNickname()
+                    service['nickname'] = nickname
+
+                elif (choice == DONE):
+                    if(ValidateService(service, cfg)):
+                        sync[first_second] = service
+                        break
+
+                elif (choice == BACK):
+                    break
+
 
 def ReregisterSync(sync, cfg):
     for first_second in ['first', 'second']:
-        if sync[first_second]['type'] == 'AGOL':
-            ImportAGOL()
-            
-            # check that service is set up correctly
-            token = agol.GetToken(cfg.AGOL_url, cfg.AGOL_username, cfg.AGOL_password)
-
-            print('Validating AGOL service...')
-
-            url = sync[first_second]['serviceUrl']
-            layerId = sync[first_second]['layerId']
-
-            try:
-                ready, serverGen, srid = agol.CheckService(url, layerId, token)
-            except (HTTPError, AGOLServiceError, AGOLError, JSONDecodeError, Error) as e:
-                logging.error('Error checking AGOL service!')
-                logging.error(e.message)
-                return False
-
-            logging.info('Feature service valid!')  # , 1)
-
+        service = sync[first_second]
+        serverGen = ValidateService(service, cfg)
+        if(serverGen):
             sync[first_second]['servergen'] = serverGen
 
-        else:
-            ImportSDE()
-            
-            hostname = sync[first_second]['hostname']
-            database = sync[first_second]['database']
-            fcName = sync[first_second]['featureclass']
-
-            # check that featureclass exists in sde table registry
-            connection = sde.Connect(hostname, database, cfg.SQL_username, cfg.SQL_password)
-
-            if not connection:
-                continue
-
-            print('Validating SDE featureclass...')
-
-            evwName = sde.CheckFeatureclass(connection, fcName)
-
-            if (evwName):
-                # get current information
-                stateId = sde.GetCurrentStateId(connection)
-                globalIds = sde.GetGlobalIds(connection, evwName, fcName)
-
-                logging.info('Featureclass valid!')  # , 1)
-
-                sync[first_second]['servergen'] = {'stateId': stateId, 'globalIds': globalIds}
-
-            else:
-                return False
-
     return sync
-
-#def BackupFeatureClass(sync_num):
-#    ImportSDE()
-#    sde.BackupFeatureClass(sync_num)
 
 def CleanAttributes(dict_in):
     #turns all keys to lower case, removes unwanted attributes
@@ -320,11 +395,11 @@ def ExtractChanges(service, cfg):
         
         deltas, data, srid = agol.ExtractChanges(service, cfg)
 
-    for add in deltas['adds']:
-        add = CleanDelta(add, srid)
-        
-    for update in deltas['updates']:
-        update = CleanDelta(update, srid)
+    for (index, add) in enumerate(deltas['adds']):
+        deltas['adds'][index] = CleanDelta(add, srid)
+
+    for (index, update) in enumerate(deltas['updates']):
+        deltas['updates'][index] = CleanDelta(update, srid)
 
     return deltas, data
 

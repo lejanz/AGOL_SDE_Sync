@@ -103,6 +103,7 @@ def main():
             sync = 'loop'
             while(sync == 'loop'):
                 sync = sync_functions.CreateNewSync(cfg)
+
             if(sync):
                 syncs.append(sync)
                 sync_functions.WriteSyncs(syncs)
@@ -130,17 +131,25 @@ def main():
             sync = syncs[sync_index]
             n = sync['name']
 
-            menu = ['Run "{}"'.format(n), 'View "{}"'.format(n), 'Re-register "{}"'.format(n), 'Delete "{}"'.format(n), 'Back']
+            menu = ['Run "{}"'.format(n), 'View "{}"'.format(n), 'Edit "{}"'.format(n), 'Re-register "{}"'.format(n), 'Delete "{}"'.format(n), 'Back']
             RUN_SYNC = 1
             VIEW_SYNC = 2
-            REREGISTER_SYNC = 3
-            DELETE_SYNC = 4
-            BACK = 5
+            EDIT_SYNC = 3
+            REREGISTER_SYNC = 4
+            DELETE_SYNC = 5
+            BACK = 6
 
             choice = ui.Options('Select an option:', menu)
 
             if (choice == VIEW_SYNC):  # view sync details
                 ui.PrintSyncDetails(sync)
+
+            elif (choice == EDIT_SYNC):
+                sync = sync_functions.EditSync(sync, cfg)
+
+                if(sync):
+                    syncs[sync_index] = sync
+                    sync_functions.WriteSyncs(syncs)
 
             elif (choice == REREGISTER_SYNC):
                 # ask to confirm
