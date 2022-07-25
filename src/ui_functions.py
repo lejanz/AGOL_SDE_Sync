@@ -86,7 +86,7 @@ def GetAgolURL():
 
 def GetNickname():
     nickname = raw_input(
-        '\nEnter a nickname to track this FEATURE SERVICE (this is also used in conflict resolution).\n'
+        'Enter a nickname to track this FEATURE SERVICE (this is also used in conflict resolution).\n'
         'You may want to enter the storage location (AGOL or SDE) in parenthesis:')
     return nickname
 
@@ -96,6 +96,8 @@ def GetFcName():
 
     if fcName.lower() == 'quit':
         return False
+
+    return fcName
 
 
 def PrintServiceDetails(service):

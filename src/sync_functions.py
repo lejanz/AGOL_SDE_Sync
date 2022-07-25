@@ -158,8 +158,6 @@ def CreateNewService(cfg, pc):
         if not fcName:
             return False
 
-        print('')
-
         service = {'type': 'SDE',
                    'featureclass': fcName,
                    'sde_connect': sde_connect,
@@ -193,17 +191,16 @@ def CreateNewService(cfg, pc):
         #    print('Please enter a number for the layer id!')
         #    continue
 
-        print('')
-
         service = {'type': 'AGOL',
                    'serviceUrl': url,
                    'layerId': layerId}
 
         # endif
-
+    print('')
     serverGen = ValidateService(service, cfg)
 
     if (serverGen):
+        print('')
         nickname = ui.GetNickname()
 
         service['servergen'] = serverGen
@@ -252,116 +249,133 @@ def CreateNewSync(cfg):
 
     return sync
 
-def EditSync(sync, cfg):
-    logging.info('Editing sync "{}"...'.format(sync['name']))
-    ui.PrintSyncDetails(sync)
-
-    while(True):
-        menu = ['Name', 'Parent dataset', 'Child dataset', 'Done', 'Cancel']
-        NAME = 1
-        PARENT_DATASET = 2
-        CHILD_DATASET = 3
-        DONE = 4
-        CANCEL = 5
-
-        choice = ui.Options('Choose an option to edit:', menu)
-
-        if(choice == NAME):
-            sync['name'] = ui.GetName()
-
-        elif(choice == DONE):
-            ui.PrintSyncDetails(sync)
-            return sync
-
-        elif(choice == CANCEL):
-            return False
-
-        else:
-            if(choice == PARENT_DATASET):
-                first_second = 'first'
-                i = 1
-            elif(choice == CHILD_DATASET):
-                first_second = 'second'
-                i = 2
-
-            while True:
-                service = sync[first_second]
-                TYPE = 1
-                NICKNAME = 2
-
-                if(service['type'] == 'AGOL'):
-                    ImportAGOL()
-
-                    menu = ['Type', 'Nickname', 'URL', 'Done', 'Back']
-                    URL = 3
-                    DONE = 4
-                    BACK = 5
-
-                    choice = ui.Options('What would you like to edit in "{}"'.format(service['nickname']), menu)
-
-                    if(choice == URL):
-                        url, layerId = ui.GetAgolURL()
-                        if not url:
-                            continue
-                        service['serviceUrl'] = url
-                        service['layerId'] = layerId
-
-                elif(service['type'] == 'SDE'):
-                    ImportSDE()
-
-                    menu = ['Type', 'Nickname', 'SDE Connection', 'Featureclass', 'Done', 'Back']
-                    SDE_CONNECT = 3
-                    FEATURECLASS = 4
-                    DONE = 5
-                    BACK = 6
-
-                    choice = ui.Options('What would you like to edit in "{}"'.format(service['nickname']), menu)
-
-                    if(choice == SDE_CONNECT):
-                        sde_connect, hostname, database = GetSdeFilepath()
-                        if not sde_connect:
-                            continue
-
-                        service['sde_connect'] = sde_connect
-                        service['hostname'] = hostname
-                        service['database'] = database
-
-                    elif(choice == FEATURECLASS):
-                        fcName = ui.GetFcName()
-                        if not fcName:
-                            continue
-
-                        service[fcName] = fcName
-
-                if (choice == TYPE):
-                    #create a whole new service
-                    service = CreateNewService(cfg, i)
-                    if (service == False):
-                        continue
-                    elif (service == 'loop'):
-                        break
-
-                elif (choice == NICKNAME):
-                    nickname = ui.GetNickname()
-                    service['nickname'] = nickname
-
-                elif (choice == DONE):
-                    if(ValidateService(service, cfg)):
-                        sync[first_second] = service
-                        break
-
-                elif (choice == BACK):
-                    break
-
-
 def ReregisterSync(sync, cfg):
     for first_second in ['first', 'second']:
         service = sync[first_second]
         serverGen = ValidateService(service, cfg)
         if(serverGen):
             sync[first_second]['servergen'] = serverGen
+            logging.info('Servergen updated!')
 
     return sync
+
+def EditSync(sync, cfg):
+    logging.info('Editing sync "{}"...'.format(sync['name']))
+    ui.PrintSyncDetails(sync)
+
+    while(True):
+        menu = ['SAVE changes', 'DISCARD changes', 'Name', 'Parent dataset ("{}")'.format(sync['first']['nickname']), 'Child dataset ("{}")'.format(sync['second']['nickname'])]
+        DONE = 1
+        CANCEL = 2
+        NAME = 3
+        PARENT_DATASET = 4
+        CHILD_DATASET = 5
+
+        choice = ui.Options('Choose an option to edit:', menu)
+
+        if(choice == NAME):
+            print('Current name: "{}"'.format(sync['name']))
+            sync['name'] = ui.GetName()
+            print('')
+
+        elif(choice == DONE):
+            menu = ['Re-register SYNC', 'DO NOT re-register', 'BACK']
+            choice = ui.Options('Would you like to re-register this sync?', menu)
+            if(choice == 1):
+                sync = ReregisterSync(sync, cfg)
+            elif(choice == 3):
+                continue
+
+            ui.PrintSyncDetails(sync)
+            return sync
+
+        elif(choice == CANCEL):
+            menu = ['DISCARD changes', 'BACK']
+            choice = ui.Options('Are you sure you want to discard your edits?', menu)
+            if(choice == 1):
+                return False
+
+        else:
+            if(choice == PARENT_DATASET):
+                first_second = 'first'
+                i = 0
+            elif(choice == CHILD_DATASET):
+                first_second = 'second'
+                i = 1
+
+            service = sync[first_second]
+            while True:
+
+                DONE = 1
+                TYPE = 2
+                NICKNAME = 3
+
+                if(service['type'] == 'AGOL'):
+                    ImportAGOL()
+
+                    menu = ['DONE', 'Type', 'Nickname', 'URL']
+                    URL = 4
+
+
+                    choice = ui.Options('What would you like to edit in "{}"'.format(service['nickname']), menu)
+
+                    if(choice == URL):
+                        print('Current layer URL: {}/{}'.format(service['serviceUrl'], service['layerId']))
+                        url, layerId = ui.GetAgolURL()
+                        if not url:
+                            continue
+                        service['serviceUrl'] = url
+                        service['layerId'] = layerId
+                        print('')
+
+                elif(service['type'] == 'SDE'):
+                    ImportSDE()
+
+                    menu = ['DONE', 'Type', 'Nickname', 'SDE Connection', 'Featureclass']
+                    SDE_CONNECT = 4
+                    FEATURECLASS = 5
+
+                    choice = ui.Options('What would you like to edit in "{}"'.format(service['nickname']), menu)
+
+                    if(choice == SDE_CONNECT):
+                        print('Current .sde file: {}'.format(service['sde_connect']))
+                        sde_connect, hostname, database = GetSdeFilepath()
+                        if sde_connect:
+                            service['sde_connect'] = sde_connect
+                            service['hostname'] = hostname
+                            service['database'] = database
+
+                        print('')
+
+                    elif(choice == FEATURECLASS):
+                        print('Current featureclass: {}'.format(service['featureclass']))
+                        fcName = ui.GetFcName()
+                        if fcName:
+                            service['featureclass'] = fcName
+
+                        print('')
+
+
+                if (choice == TYPE):
+                    #create a whole new service
+                    service = CreateNewService(cfg, i)
+                    print('')
+                    if (service == False):
+                        continue
+                    elif (service == 'loop'):
+                        break
+
+                elif (choice == NICKNAME):
+                    print('Current nickname: {}'.format(service['nickname']))
+                    nickname = ui.GetNickname()
+                    service['nickname'] = nickname
+                    print('')
+
+                elif (choice == DONE):
+                    if(ValidateService(service, cfg)):
+                        sync[first_second] = service
+                        print('')
+                        break
 
 def CleanAttributes(dict_in):
     #turns all keys to lower case, removes unwanted attributes

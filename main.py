@@ -145,11 +145,19 @@ def main():
                 ui.PrintSyncDetails(sync)
 
             elif (choice == EDIT_SYNC):
+                import copy
+                sync = copy.deepcopy(sync)  # make a copy of sync so we do not alter the original
+
                 sync = sync_functions.EditSync(sync, cfg)
 
                 if(sync):
+                    logging.info('Applying edits to "{}"'.format(sync['name']))
                     syncs[sync_index] = sync
                     sync_functions.WriteSyncs(syncs)
+                else:
+                    logging.info('Changes reverted.')
+
+                print('')
 
             elif (choice == REREGISTER_SYNC):
                 # ask to confirm
