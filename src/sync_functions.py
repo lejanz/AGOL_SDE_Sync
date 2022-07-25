@@ -73,7 +73,9 @@ def GetSdeFilepath():
         hostname, database = sde.GetServerFromSDE(sde_connect)
     except Exception as e:
         print("Unable to open .sde file")
-        return False, False, False
+        hostname = raw_input('Enter SDE hostname (i.e. inpredwgis2):')
+        database = raw_input('Enter SDE database name (i.e. redw):')
+        return None, hostname, database
 
     logging.info("Chose '{}'".format(sde_connect))
 
@@ -148,11 +150,8 @@ def CreateNewService(cfg, pc):
         ImportSDE()
 
         sde_connect, hostname, database = GetSdeFilepath()
-        if not sde_connect:
-            return False
 
-        #hostname = raw_input('Enter SDE hostname (i.e. inpredwgis2):')
-        #database = raw_input('Enter SDE database name (i.e. redw):')
+        print('')
 
         fcName = ui.GetFcName()
         if not fcName:
@@ -340,10 +339,9 @@ def EditSync(sync, cfg):
                     if(choice == SDE_CONNECT):
                         print('Current .sde file: {}'.format(service['sde_connect']))
                         sde_connect, hostname, database = GetSdeFilepath()
-                        if sde_connect:
-                            service['sde_connect'] = sde_connect
-                            service['hostname'] = hostname
-                            service['database'] = database
+                        service['sde_connect'] = sde_connect
+                        service['hostname'] = hostname
+                        service['database'] = database
 
                         print('')
 

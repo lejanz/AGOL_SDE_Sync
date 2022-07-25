@@ -126,10 +126,7 @@ def ReadSQLWithDebug(query, connection):
     return df
 
 def BackupFeatureClass(service, sync_num):
-
-    try:
-        sde_connect = service['sde_connect']
-    except:
+    if ('sde_connect' not in service.keys()) or (not service['sde_connect']):
         print("SDE service does not include .sde filepath. Please recreate this sync ASAP.")
         while(True):
             sde_connect = raw_input("Enter .sde filepath for this SDE database:")

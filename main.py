@@ -170,9 +170,12 @@ def main():
                     if sync:
                         syncs[sync_index] = sync
                         sync_functions.WriteSyncs(syncs)
-                        print('Sync "{}" re-registered successfuly!\n'.format(sync['name']))
+                        logging.info('Sync "{}" re-registered successfuly!'.format(sync['name']))
                     else:
                         logging.info("Failed to re-register sync!")
+
+                    print('')
+
 
 
             elif (choice == DELETE_SYNC):  # delete sync
@@ -188,6 +191,7 @@ def main():
                     # write updated syncs to json
                     sync_functions.WriteSyncs(syncs)
                     logging.info('Sync "{}" deleted.'.format(nickname))
+                    print('')
 
             elif (choice == BACK):
                 continue
