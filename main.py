@@ -151,8 +151,8 @@ def main():
                 sync = sync_functions.EditSync(sync, cfg)
 
                 if(sync):
-                    logging.info('Applying edits to "{}"'.format(sync['name']))
                     syncs[sync_index] = sync
+                    logging.info('Edits applied to "{}"!'.format(sync['name']))
                     sync_functions.WriteSyncs(syncs)
                 else:
                     logging.info('Changes reverted.')

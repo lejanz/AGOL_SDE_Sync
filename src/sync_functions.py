@@ -282,6 +282,7 @@ def EditSync(sync, cfg):
             choice = ui.Options('Would you like to re-register this sync?', menu)
             if(choice == 1):
                 sync = ReregisterSync(sync, cfg)
+                print('')
             elif(choice == 3):
                 continue
 
