@@ -54,17 +54,6 @@ def GetSyncNum():
         sync_num = int(raw_input('Enter starting number for sync counter:').strip())
 
     return sync_num
-    
-def PrintEdits(deltas, first_service, second_service):
-    num_adds = len(deltas['adds'])
-    num_updates = len(deltas['updates'])
-    num_deletes = len(deltas['deleteIds'])
-    print("{} adds, {} updates, and {} deletes will be applied from {} to {}.".format(num_adds,
-                                                                                        num_updates,
-                                                                                        num_deletes,
-                                                                                        first_service['nickname'],
-                                                                                        second_service['nickname']))
-    return num_adds + num_updates + num_deletes
 
 def main():
     logging.debug('-------------')
@@ -223,8 +212,8 @@ def main():
 
                 # print total number of edits applied to both services
                 print('')
-                PrintEdits(first_deltas, sync['first'], sync['second'])
-                PrintEdits(second_deltas, sync['second'], sync['first'])
+                ui.PrintEdits(first_deltas, sync['first'], sync['second'])
+                ui.PrintEdits(second_deltas, sync['second'], sync['first'])
                 print('')
 
                 # ask user to confirm before applying edits

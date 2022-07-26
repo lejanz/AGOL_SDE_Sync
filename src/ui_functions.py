@@ -53,18 +53,35 @@ file_handler.setLevel(log.DEBUG)
 logging.addHandler(file_handler)
 logging.addHandler(stream_handler)
 
+
 def printDate():
     print(datetime.now())
+
     
 def Debug(message, messageLevel, indent=0):
     logger.debug('{}{}\n'.format((indent*' '), message), messageLevel)
 
+
 def Break():
     print('----------------------')
+
+
+def PrintEdits(deltas, first_service, second_service):
+    num_adds = len(deltas['adds'])
+    num_updates = len(deltas['updates'])
+    num_deletes = len(deltas['deleteIds'])
+    print("{} adds, {} updates, and {} deletes will be applied from {} to {}.".format(num_adds,
+                                                                                        num_updates,
+                                                                                        num_deletes,
+                                                                                        first_service['nickname'],
+                                                                                        second_service['nickname']))
+    return num_adds + num_updates + num_deletes
+
 
 def GetName():
     name = raw_input('ENTER a name for this SYNC:')
     return name
+
 
 def GetAgolURL():
     url = raw_input('ENTER URL for LAYER (sublayer for the service). It ends in a integer; system will verify on next step):')

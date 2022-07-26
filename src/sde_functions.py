@@ -23,17 +23,6 @@ def CleanDeltas(dict_in):
 
     return dict_in
 
-def AddQuotes(dict_in):
-    #adds quote marks to non-float values, turns all values into strings, escapes apostrophes
-    
-    if (not isinstance(dict_in[k], float)) and (not isinstance(dict_in[k], int)):
-        dict_in[k] = str(dict_in[k]).replace("'", "''")
-        dict_in[k] = "'{}'".format(dict_in[k])
-    else:
-        dict_in[k] = str(dict_in[k])
-        
-    return dict_in
-
 def LowercaseDataframe(df):
     #converts all column names to lower case
     df.columns = [col.lower() for col in df.columns]
@@ -62,12 +51,13 @@ def GetServerFromSDE(sde_file):
 def Connect(server, database, UID, PWD):
     logging.debug('Connecting to SQL Server...')
     connection_string = 'Driver={{SQL Server}};Server={};Database={};User Id={};Password={}'.format(server, database, UID, PWD)
-    logging.debug('SQL Connection string: "{}"\n'.format(connection_string))
+    #logging.debug('SQL Connection string: "{}"\n'.format(connection_string))
     
     try:
         connection = pyodbc.connect(connection_string)    
     except:
         logging.error("Connection error!")#, 0, indent=4)
+        logging.error("Connection string: {}".format(connection_string))
         raise
 
     logging.debug('Connected to SQL!')#, 2, indent=4)
@@ -125,9 +115,10 @@ def ReadSQLWithDebug(query, connection):
     df = LowercaseDataframe(df)
     return df
 
+
 def BackupFeatureClass(service, sync_num):
     if ('sde_connect' not in service.keys()) or (not service['sde_connect']):
-        print("SDE service does not include .sde filepath. Please recreate this sync ASAP.")
+        print("SDE service does not include .sde filepath.")
         while(True):
             sde_connect = raw_input("Enter .sde filepath for this SDE database:")
             try:
@@ -195,6 +186,15 @@ def GetRowcount(connection):    #gets number of rows affected by most recent que
         logging.error(cursor.messages)
         return -1
 
+def GetDatatypes(connection, fcName):
+    #grabs column datatypes from featureclass
+
+    query = "SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '{}'".format(fcName)
+    response = ReadSQLWithDebug(query, connection)
+
+    #print(response)
+    return response
+
 def CheckFeatureclass(connection, fcName):
     #Checks that featureclass has globalids and is registered as versioned, returns versioned view name
     
@@ -203,18 +203,35 @@ def CheckFeatureclass(connection, fcName):
     query = "SELECT imv_view_name FROM SDE_table_registry WHERE table_name = '{}'".format(fcName)
     data = ReadSQLWithDebug(query, connection)
     
-    if (len(data.index) < 1):
+    if (len(data.index) < 1) or (data['imv_view_name'][0] is None):
         logging.error("'{}' not found in SDE table registry. Check that it has been registered as versioned.\n".format(fcName))#, 1)
         return False
 
     evwName = data['imv_view_name'][0]
     logging.debug("Versioned view name: {}".format(evwName))
 
-    query = "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '{}' AND COLUMN_NAME = 'GLOBALID'".format(fcName)
-    data = ReadSQLWithDebug(query, connection)
+    datatypes = GetDatatypes(connection, fcName)
+    datatypes['column_name'] = [val.lower() for val in datatypes['column_name']]
+    datatypes['data_type'] = [val.lower() for val in datatypes['data_type']]
+
+    globalid = datatypes.loc[datatypes['column_name'] == 'globalid']
+    shape = datatypes.loc[datatypes['column_name'] == 'shape']
+
+    #query = "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '{}' AND COLUMN_NAME = 'GLOBALID'".format(fcName)
+    #data = ReadSQLWithDebug(query, connection)
     
-    if (len(data.index) < 1):
+    if (len(globalid.index) < 1):
         logging.error('Featureclass has no global IDs!')#, 0)
+        return False
+    elif not (globalid['data_type'].iloc[0] == 'uniqueidentifier'):
+        logging.warning('WARNING: GlobalID is not of type "uniqueidentifier!"')
+
+    if (len(shape.index) < 1):
+        logging.error('Featureclass has no SHAPE column!')  # , 0)
+        return False
+    elif not (shape['data_type'].iloc[0] == 'geometry'):
+        logging.error('Featureclass SHAPE column is not of type "geometry"!')
+        print('Please migrate this featureclass\' storage type to "geometry".')
         return False
 
     logging.debug('Featureclass is valid.')#, 1, indent=4)
@@ -237,15 +254,6 @@ def GetCurrentStateId(connection):
     logging.debug('SDE state id: {}'.format(state_id))#, 2, indent=4)
               
     return state_id
-
-def GetDatatypes(connection, fcName):
-    #grabs column datatypes from featureclass
-
-    query = "SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '{}'".format(fcName)
-    response = ReadSQLWithDebug(query, connection)
-
-    #print(response)
-    return response
 
 def NoSRID(): #if SRID cannot be found, user will be asked to decide next step
     logging.warning('Error getting SRID!')
@@ -442,7 +450,7 @@ def JsonToSql(deltas, datatypes):
             raise   #TODO: make EsriToWkt raise instead
 
         #extract attributes
-        attributes = RemoveNulls(delta['attributes'])
+        #attributes = RemoveNulls(delta['attributes'])
 
         #clean attributes
         for key in attributes.keys():
