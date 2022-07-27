@@ -9,7 +9,7 @@ from datetime import datetime
 from error import Cancelled, GUIDError
 import EsriWktConverter as ewc
 #import logging
-arcpy = None
+
 
 def RemoveNulls(dict_in):
     #returns dictionary with only non-null entries
@@ -115,32 +115,51 @@ def ReadSQLWithDebug(query, connection):
     df = LowercaseDataframe(df)
     return df
 
+def GetOwner(connection, fcName):
+    query = "SELECT owner FROM sde_table_registry WHERE table_name='{}'".format(fcName)
+    df = ReadSQLWithDebug(query, connection)
 
-def BackupFeatureClass(service, sync_num):
+    owner = df['owner'].iloc[0]
+    print(owner)
+    return owner
+
+
+def BackupFeatureClass(service, sync_num, cfg):
+    logging.info("Loading arcpy (this may take a while)...")
+    import arcpy
+
     if ('sde_connect' not in service.keys()) or (not service['sde_connect']):
-        print("SDE service does not include .sde filepath.")
-        while(True):
-            sde_connect = raw_input("Enter .sde filepath for this SDE database:")
-            try:
-                server, db = GetServerFromSDE(sde_connect)
-            except:
-                print("Invalid filepath!")
-                continue
-            if not db == service['database']:
-                print("Database name does not match this service!")
-                continue
-            break
+        out_folder = "sde_connects"
+        out_file = "{}_{}.sde".format(service['hostname'], service['database'])
+        service['sde_connect'] = "{}\\{}".format(out_folder, out_file)
+
+        arcpy.CreateDatabaseConnection_management(out_folder, out_file, 'SQL_SERVER', service['hostname'],
+                                                  'DATABASE_AUTH', cfg.SQL_username, cfg.SQL_password,
+                                                  'SAVE_USERNAME', service['database'])
+
+
+
+        # print("SDE service does not include .sde filepath.")
+        # while(True):
+        #     sde_connect = raw_input("Enter .sde filepath for this SDE database:")
+        #     try:
+        #         server, db = GetServerFromSDE(sde_connect)
+        #     except:
+        #         print("Invalid filepath!")
+        #         continue
+        #     if not db == service['database']:
+        #         print("Database name does not match this service!")
+        #         continue
+        #     break
         
     
     from datetime import datetime
     ##import shutil, os
     
-    now = datetime.now() # current date and time
+    now = datetime.now()  # current date and time
     today = now.strftime("%m%d%Y")
 
-    if (not arcpy):
-        logging.info("Loading arcpy (this may take awhile)...")
-        from arcpy import Copy_management, Delete_management
+
 
     ##fileout = r'N:\Admin\Backup\LSync_Backup\syncs_ID'+ str(sync_num)+ '_' + str(today) + '.json'
     ##filein = r'config\syncs.json'
@@ -148,23 +167,25 @@ def BackupFeatureClass(service, sync_num):
 
     fcName = service['featureclass']
     db = service['database']
+    sde_connect = service['sde_connect']
+    owner = GetOwner(connection, fcName)
     
     backup_name = '{}_BACKUP_{}_{}'.format(fcName, str(sync_num), today)
 
-    fcPath = '{}\\{}.dbo.{}'.format(sde_connect, db, fcName)
-    backup_path = '{}\\{}.dbo.{}'.format(sde_connect, db, backup_name)
+    fcPath = '{}\\{}.{}.{}'.format(sde_connect, db, owner, fcName)
+    backup_path = '{}\\{}.{}}.{}'.format(sde_connect, db, owner, backup_name)
 
     logging.debug('Creating backup at: {}'.format(backup_name))
 
     # if FC already exists, best to delete it, and if it fail, continue
     try:
-        Delete_management(backup_path, "FeatureClass")
+        arcpy.Delete_management(backup_path, "FeatureClass")
         logging.debug('Attempting to delete feature class (in case it already exists')
     except:
-        logging.debug('Feature class copy does not currently exist. Ok to crreate')    
+        logging.debug('Feature class copy does not currently exist. Ok to create')
 
     # Process:
-    Copy_management(fcPath, backup_path, "FeatureClass")
+    arcpy.Copy_management(fcPath, backup_path, "FeatureClass")
     logging.info("Created: " + backup_path)
     
     #query = 'SELECT * INTO {} FROM {}_evw'.format(backup_name, fcName)

@@ -129,6 +129,7 @@ def PrintServiceDetails(service):
         print('  SQL Server: {}'.format(service['hostname']))
         print('  SDE Database: {}'.format(service['database']))
         print('  SDE featureclass: {}'.format(service['featureclass']))
+        print('  SDE state id: {}'.format(service['servergen']['stateId']))
 
 def PrintSyncDetails(sync):
     print('Details of sync "{}":'.format(sync['name']))

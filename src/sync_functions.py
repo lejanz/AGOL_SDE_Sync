@@ -133,7 +133,7 @@ def ValidateService(service, cfg):
         logging.info('Feature service layer valid!')
 
         return serverGen
-    
+
 
 def CreateNewService(cfg, pc):
     types = ['SDE', 'AGOL', 'Back']
