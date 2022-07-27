@@ -3,6 +3,7 @@ import json
 from error import HTTPError, AGOLServiceError, AGOLError, JSONDecodeError, Error
 from  Tkinter import *
 import tkFileDialog
+from datetime import datetime
 
 logging = ui.logging
 
@@ -132,6 +133,7 @@ def ValidateService(service, cfg):
         logging.info('Feature service layer valid!')
 
         return serverGen
+    
 
 def CreateNewService(cfg, pc):
     types = ['SDE', 'AGOL', 'Back']
@@ -174,7 +176,7 @@ def CreateNewService(cfg, pc):
               'Then click on one of the layers on the main page. At the bottom right, the URL for the\n'
               'sub layer will be displayed. The hosted-feature-layer sublayer URL in the lower right\n'
               'will end with "Feature Server/x, where x is the sub layer ID. A list of URLs for common\n'
-              'layers can befound at "https://tinyurl.com/48kj9ccf".\n')
+              'layers can be found at "https://tinyurl.com/48kj9ccf".\n')
 
         url, layerId = ui.GetAgolURL()
 
@@ -246,6 +248,8 @@ def CreateNewSync(cfg):
             #failed to create service
             continue
 
+    sync['last_run'] = str(datetime.now())
+
     return sync
 
 def ReregisterSync(sync, cfg):
@@ -255,6 +259,10 @@ def ReregisterSync(sync, cfg):
         if(serverGen):
             sync[first_second]['servergen'] = serverGen
             logging.info('Servergen updated!')
+        else:
+            return False
+
+    sync['last_run'] = str(datetime.now())
 
     return sync
 
