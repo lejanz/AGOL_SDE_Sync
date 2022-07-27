@@ -450,7 +450,7 @@ def JsonToSql(deltas, datatypes):
             raise   #TODO: make EsriToWkt raise instead
 
         #extract attributes
-        #attributes = RemoveNulls(delta['attributes'])
+        attributes = delta['attributes']
 
         #clean attributes
         for key in attributes.keys():
