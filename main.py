@@ -120,15 +120,24 @@ def main():
             sync = syncs[sync_index]
             n = sync['name']
 
-            menu = ['Run "{}"'.format(n), 'View "{}"'.format(n), 'Edit "{}"'.format(n), 'Re-register "{}"'.format(n), 'Delete "{}"'.format(n), 'Back']
+            menu = ['Run "{}"'.format(n), 'Backup "{}"'.format(n), 'View "{}"'.format(n), 'Edit "{}"'.format(n), 'Re-register "{}"'.format(n), 'Delete "{}"'.format(n), 'Back']
             RUN_SYNC = 1
-            VIEW_SYNC = 2
-            EDIT_SYNC = 3
-            REREGISTER_SYNC = 4
-            DELETE_SYNC = 5
-            BACK = 6
+            BACKUP_SYNC = 2
+            VIEW_SYNC = 3
+            EDIT_SYNC = 4
+            REREGISTER_SYNC = 5
+            DELETE_SYNC = 6
+            BACK = 7
 
             choice = ui.Options('Select an option:', menu)
+
+            if (choice == BACKUP_SYNC):
+                sync_num = GetSyncNum()
+
+                for service in [sync['first'], sync['second']]:
+                    sync_functions.BackupService(service, cfg, sync_num)
+
+                print('')
 
             if (choice == VIEW_SYNC):  # view sync details
                 ui.PrintSyncDetails(sync)
@@ -164,8 +173,6 @@ def main():
                         logging.info("Failed to re-register sync!")
 
                     print('')
-
-
 
             elif (choice == DELETE_SYNC):  # delete sync
                 nickname = sync['name']

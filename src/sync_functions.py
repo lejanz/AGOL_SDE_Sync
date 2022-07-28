@@ -452,6 +452,30 @@ def ApplyEdits(service, cfg, deltas, sync_num, data=None):
 
         return agol.ApplyEdits(service, cfg, deltas, sync_num, backup, data=data)
 
+def BackupService(service, cfg, sync_num):
+    #create backup of featureclass or feature service
+    logging.info('Backing up "{}"...'.format(service['nickname']))
+
+    if service['type'] == 'SDE':
+        ImportSDE()
+
+        connection = sde.Connect(service['hostname'], service['database'], cfg.SQL_username, cfg.SQL_password)
+        evwName = sde.CheckFeatureclass(connection, service['featureclass'])
+        if not (connection and evwName):
+            return False
+
+        sde.BackupFeatureClass(service, sync_num, connection, cfg)
+
+    elif service['type'] == 'AGOL':
+        ImportAGOL()
+
+        token = agol.GetToken(cfg.AGOL_url, cfg.AGOL_username, cfg.AGOL_password)
+        serviceId, gen, srid = agol.CheckService(service['serviceUrl'], service['layerId'], token)
+
+        agol.Backup(cfg.AGOL_url, cfg.AGOL_username, serviceId, token, service['layerId'])
+
+    logging.info('Backup complete.')
+
 def GetGlobalIds(dict_in):
     #pulls global ids from adds or updates dictionary, returns as set
     return {add['attributes']['globalid'] for add in dict_in}

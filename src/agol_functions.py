@@ -262,8 +262,8 @@ def ApplyEdits(service, cfg, deltas, sync_num, backup, data=None):
     layer = service['layerId']
     
     if data == None:
-            token = GetToken(cfg.AGOL_url, cfg.AGOL_username, cfg.AGOL_password)
-            serviceId, gen, srid = CheckService(service['serviceUrl'], service['layerId'], token)
+        token = GetToken(cfg.AGOL_url, cfg.AGOL_username, cfg.AGOL_password)
+        serviceId, gen, srid = CheckService(service['serviceUrl'], service['layerId'], token)
     else:
         token = data['token']
         serviceId = data['serviceid']

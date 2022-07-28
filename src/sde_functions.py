@@ -124,7 +124,7 @@ def GetOwner(connection, fcName):
     return owner
 
 
-def BackupFeatureClass(service, sync_num, cfg):
+def BackupFeatureClass(service, sync_num, connection, cfg):
     logging.info("Loading arcpy (this may take a while)...")
     import arcpy
 
@@ -686,7 +686,7 @@ def ApplyEdits(service, cfg, deltas, sync_num, backup, data=None): #connection, 
         evwName = data['evwName']
 
     if backup:
-        BackupFeatureClass(service, sync_num)
+        BackupFeatureClass(service, sync_num, connection, cfg)
 
     #get attribute names
     columns = GetDatatypes(connection, fcName)['column_name'].tolist()
