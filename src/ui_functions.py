@@ -73,8 +73,8 @@ def PrintEdits(deltas, first_service, second_service):
     print("{} adds, {} updates, and {} deletes will be applied from {} to {}.".format(num_adds,
                                                                                         num_updates,
                                                                                         num_deletes,
-                                                                                        first_service['nickname'],
-                                                                                        second_service['nickname']))
+                                                                                        first_service.nickname,
+                                                                                        second_service.nickname))
     return num_adds + num_updates + num_deletes
 
 

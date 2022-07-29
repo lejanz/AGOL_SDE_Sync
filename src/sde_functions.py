@@ -242,7 +242,16 @@ class sde:
         except ValueError:
             self.sde_connect = None
 
-        return self
+    def ToDict(self):
+        service = {'type': 'SDE',
+                   'featureclass': self.fcName,
+                   'sde_connect': self.sde_connect,
+                   'hostname': self.hostname,
+                   'database': self.database,
+                   'servergen': self.servergen,
+                   'nickname': self.nickname }
+
+        return service
 
     #gets SQL server and database from .sde file
     def GetServerFromSDE(self):
@@ -272,14 +281,14 @@ class sde:
         UID = self.cfg.SQL_username
         PWD = self.cfg.SQL_password
 
-        logging.debug('Connecting to SQL Server...')
+        logging.info('Connecting to SQL Server...')
         connection_string = 'Driver={{SQL Server}};Server={};Database={};User Id={};Password={}'.format(self.hostname, self.database, UID, PWD)
         #logging.debug('SQL Connection string: "{}"\n'.format(connection_string))
 
         try:
             connection = pyodbc.connect(connection_string)
         except:
-            logging.error("Connection error!")#, 0, indent=4)
+            logging.error("SQL connection error!")#, 0, indent=4)
             logging.error("Connection string: {}".format(connection_string))
             raise
 
@@ -292,7 +301,7 @@ class sde:
 
     #queries sql, logs query, and converts returned dataframe to lowercase
     def ReadSQLWithDebug(self, query):
-        logging.debug('Excecuting SQL query: "{}"'.format(query))#, 3)
+        logging.debug('Executing SQL query: "{}"'.format(query))#, 3)
         try:
             df = pd.read_sql(query, self.connection)
         except:
@@ -489,7 +498,7 @@ class sde:
         logging.debug('Getting SDE global IDs...')#, 2)
 
         query = "SELECT GLOBALID FROM {}".format(self.evwName)
-        globalIds = self.ReadSQLWithDebug(self.connection)
+        globalIds = self.ReadSQLWithDebug(query)
 
         globalIdsList = globalIds.iloc[:, 0].tolist()
 
@@ -505,8 +514,11 @@ class sde:
 
         return {'stateId': stateId, 'globalIds': globalIds}
 
-    def UpdateServergen(self):
-        self.servergen = self.GetServergen()
+    def UpdateServergen(self, servergen=None):
+        if not servergen:
+            servergen = self.GetServergen()
+
+        self.servergen = servergen
 
     def GetChanges(self, stateId=None):
         #returns rows from versioned view with state id > state
@@ -639,7 +651,7 @@ class sde:
             raise Exception('Failed to acquire SRID')
 
         #get data from previous run
-        lastGlobalIds = self.severgen['globalIds']
+        lastGlobalIds = self.servergen['globalIds']
         #lastState = self.servergen['stateId']
 
         #get global ids and changes from versioned view
@@ -672,10 +684,8 @@ class sde:
 
         logging.info('SDE change extraction complete.')#, 0)
 
-        return deltas, srid
+        return deltas
 
-
-              
     def ApplyEdits(self, deltas): #connection, fcName, deltas, datatypes):
         #applies deltas to versioned view. Returns success codes and new SDE_STATE_ID
 

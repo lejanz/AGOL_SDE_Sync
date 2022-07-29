@@ -10,51 +10,12 @@ logging = ui.logging
 sde = None
 agol = None
 
-#load syncs.json
-def LoadSyncs():
-    #loads json file containing set up syncs
-    logging.debug('Loading syncs...')#, 2)
-    
-    try:
-        syncs_file = open('config/syncs.json', 'r')
-    except:
-        logging.warning('No syncs.json file found!')
-        return []
-
-    try:
-        syncs = json.load(syncs_file)
-    except:
-        logging.error('Invalid sync file!')
-        syncs_file.close()
-        return []
-
-    syncs_file.close()
-    logging.debug('Syncs loaded.')#, 2, indent=4)
-    return syncs
-
-#write syncs.json
-def WriteSyncs(syncs):
-    #writes sync.json with data in syncs
-    logging.debug('Updating syncs.json...')#, 2)
-    
-    try:
-        json.dumps(syncs)
-    except:
-        logging.error("Invalid syncs!")
-        return
-    
-    syncs_file = open('config/syncs.json', 'w')
-    json.dump(syncs, syncs_file, indent=4)
-    syncs_file.close()
-
-    logging.debug('syncs.json updated.')#, 2, indent=4)
-
 #import SDE functions
 def ImportSDE():
     global sde
     if sde == None:
         logging.debug('Loading SDE functions...')#, 2)
-        from src import sde_functions as sde
+        from src.sde_functions import sde
         logging.debug('SDE functions loaded.')#, 2, indent=4)
 
 #import AGOL functions
@@ -62,7 +23,7 @@ def ImportAGOL():
     global agol
     if agol == None:
         logging.debug('Loading AGOL functions...')#, 2)
-        from src import agol_functions as agol
+        from src.agol_functions import agol
         logging.debug('AGOL functions loaded.')#, 2, indent=4)
 
 def GetSdeFilepath():
@@ -82,307 +43,476 @@ def GetSdeFilepath():
 
     return sde_connect, hostname, database
 
-def ValidateService(service, cfg):
-    #checks that service is valid, returns serverGen if so
-    if service['type'] == 'SDE':
-        ImportSDE()
+def GetSyncNum():
+    try:
+        sync_num_file = open('config/syncnum.txt', 'r')
+        sync_num = int(sync_num_file.read().strip())
+        sync_num_file.close()
+    except:
+        sync_num = int(raw_input('Enter starting number for sync counter:').strip())
 
-        # check that featureclass exists in sde table registry
-        print('Validating SDE featureclass...')
+    return sync_num
 
-        hostname = service['hostname']
-        database = service['database']
-        fcName = service['featureclass']
+# load syncs.json
+def LoadSyncs():
+    # loads json file containing set up syncs
+    logging.debug('Loading syncs...')  # , 2)
 
-        connection = sde.Connect(hostname, database, cfg.SQL_username, cfg.SQL_password)
+    try:
+        syncs_file = open('config/syncs.json', 'r')
+    except:
+        logging.warning('No syncs.json file found!')
+        return []
 
-        if not connection:
-            return False
+    try:
+        syncs = json.load(syncs_file)
+    except:
+        logging.error('Invalid sync file!')
+        syncs_file.close()
+        return []
 
-        evwName = sde.CheckFeatureclass(connection, fcName)
+    syncs_file.close()
+    logging.debug('Syncs loaded.')  # , 2, indent=4)
+    return syncs
 
-        if (evwName):
-            # get current information
-            serverGen = sde.GetServergen(connection, evwName)
 
-            logging.info('Featureclass valid!')  # , 1)
-        else:
-            logging.error('Featureclass validation failed.')
-            return False
+# write syncs.json
+def WriteSyncs(syncs):
+    # writes sync.json with data in syncs
+    logging.debug('Updating syncs.json...')  # , 2)
 
-        return serverGen
+    try:
+        json.dumps(syncs)
+    except:
+        logging.error("Invalid syncs!")
+        return
 
-    elif service['type'] == 'AGOL':
-        ImportAGOL()
+    syncs_file = open('config/syncs.json', 'w')
+    json.dump(syncs, syncs_file, indent=4)
+    syncs_file.close()
 
-        # check that service is set up correctly
-        token = agol.GetToken(cfg.AGOL_url, cfg.AGOL_username, cfg.AGOL_password)
+    logging.debug('syncs.json updated.')  # , 2, indent=4)
 
-        url = service['serviceUrl']
-        layerId = service['layerId']
+class sync:
+    def __init__(self, sync, cfg):
+        self.name = sync['name']
+        self.cfg = cfg
 
-        print('Validating AGOL service...')
+        first = self.ServiceFromJson(sync['first'])
+        second = self.ServiceFromJson(sync['second'])
+
+        self.services = [first, second]
 
         try:
-            ready, serverGen, srid = agol.CheckService(url, layerId, token)
-        except (HTTPError, AGOLServiceError, AGOLError, JSONDecodeError, Error) as e:
-            logging.error('Error checking AGOL service!')
-            logging.error(e.message)
+            self.last_run = sync['last_run']
+        except ValueError:
+            self.last_run = 'Never run'
+
+    def ToDict(self):
+        sync = {
+            'name': self.name,
+            'first': self.services[0].ToDict(),
+            'second': self.services[1].ToDict(),
+            'last_run': self.last_run
+        }
+
+        return sync
+
+    def ServiceFromJson(self, service):
+        if service['type'] == 'SDE':
+            ImportSDE()
+            return sde(service, self.cfg)
+        elif service['type'] == 'AGOL':
+            ImportAGOL()
+            return agol(service, self.cfg)
+
+    def run(self):
+        # print sync counter and date
+        sync_num = GetSyncNum()
+        logging.info('Sync counter: {}'.format(sync_num))
+        # ui.printDate()
+
+        # increment sync counter
+        sync_num_file = open('config/syncnum.txt', 'w')
+        sync_num_file.write(str(sync_num + 1))
+        sync_num_file.close()
+
+        # get sync from syncs.json
+        logging.info('Executing sync "{}"...'.format(self.name))
+
+        # Extract changes from both services
+        first_deltas = self.services[0].ExtractChanges()
+        second_deltas = self.services[1].ExtractChanges()
+
+        if not (first_deltas and second_deltas):
+            logging.error('Failed to extract changes.')
+            # ui.Break()
             return False
 
-        logging.info('Feature service layer valid!')
+        # ui.Break()
 
-        return serverGen
-
-
-def CreateNewService(cfg, pc):
-    types = ['SDE', 'AGOL', 'Back']
-    parent_child = ['parent', 'child']
-
-    serviceType = ui.Options('Enter where your {} dataset is stored:'.format(parent_child[pc]), types)
-    SDE = 1
-    AGOL = 2
-    BACK = 3
-
-    if (serviceType == BACK):  # go back to start of this funtion
-        return 'loop'
-
-    elif (serviceType == SDE):
-        # for SDE services
-        ImportSDE()
-
-        sde_connect, hostname, database = GetSdeFilepath()
-
+        # print total number of edits applied to both services
+        print('')
+        ui.PrintEdits(first_deltas, self.services[0], self.services[1])
+        ui.PrintEdits(second_deltas, self.services[1], self.services[0])
         print('')
 
-        fcName = ui.GetFcName()
-        if not fcName:
+        # ask user to confirm before applying edits
+        menu = ["Continue", "Cancel"]
+        cancel_choice = ui.Options('Please review the extracted changes above before continuing.', menu)
+
+        if cancel_choice == 2:
+            logging.warning('Sync cancelled. No changes were made.\n')
+            # ui.Break()
             return False
 
-        service = {'type': 'SDE',
-                   'featureclass': fcName,
-                   'sde_connect': sde_connect,
-                   'hostname': hostname,
-                   'database': database}
+        # LogJson('{}_to_{}_before_reconcile'.format(sync['first']['nickname'], sync['second']['nickname']), first_deltas)
+        # LogJson('{}_to_{}_before_reconcile'.format(sync['second']['nickname'], sync['first']['nickname']), second_deltas)
 
-    elif serviceType == AGOL:
-        # for AGOL services
-        ImportAGOL()
+        # reconcile changes
+        first_deltas, second_deltas = ResolveConflicts(first_deltas, second_deltas,
+                                                       self.services[0].nickname,
+                                                       self.services[1].nickname)
 
-        # get service details
-
-        print('The URL for a AGOL hosted-feature-layer sublayer can be found at nps.maps.arcgis.com.\n'
-              'Browse to the hosted feature layer (the URL to the service will end with "FeatureServer").\n'
-              'Then click on one of the layers on the main page. At the bottom right, the URL for the\n'
-              'sub layer will be displayed. The hosted-feature-layer sublayer URL in the lower right\n'
-              'will end with "Feature Server/x, where x is the sub layer ID. A list of URLs for common\n'
-              'layers can be found at "https://tinyurl.com/48kj9ccf".\n')
-
-        url, layerId = ui.GetAgolURL()
-
-        if not url:
+        if not (first_deltas and second_deltas):
+            logging.warning('Sync cancelled. No changes were made.\n')
+            # ui.Break()
             return False
 
-        # layerId = raw_input('\nA feature layer consists of one or more SERVICE LAYERS. The first service layer is layer 0.\n'
-        #                        'Enter the SERVICE LAYER ID (usually 0). System will verify the service layer:')
+        # LogJson('{}_to_{}_final'.format(sync['first']['nickname'], sync['second']['nickname']), first_deltas)
+        # LogJson('{}_to_{}_final'.format(sync['second']['nickname'], sync['first']['nickname']), second_deltas)
 
-        # try:
-        #    layerId = int(layerId)
-        # except:
-        #    print('Please enter a number for the layer id!')
-        #    continue
+        # Apply edits
+        second_servergen = self.services[1].ApplyEdits(first_deltas)
+        first_servergen = self.services[0].ApplyEdits(second_deltas)
 
-        service = {'type': 'AGOL',
-                   'serviceUrl': url,
-                   'layerId': layerId}
+        # ui.Break()
 
-        # endif
-    print('')
-    serverGen = ValidateService(service, cfg)
+        # check success
+        if (second_servergen and first_servergen):
+            # Update servergens
+            logging.info('Updating servergen...')
+            self.services[0].UpdateServergen(servergen=first_servergen)
+            self.services[1].UpdateServergen(servergen=second_servergen)
 
-    if (serverGen):
-        print('')
-        nickname = ui.GetNickname()
+            # record time
+            self.UpdateLastRun()
 
-        service['servergen'] = serverGen
-        service['nickname'] = nickname
+            logging.info('Sync "{}" executed successfully!'.format(self.name))
 
-        return service
+            return True
 
-    else:
-        # invalid service
-        return False
-
-def CreateNewSync(cfg):
-    #UI to create a new sync
-    logging.debug('Creating sync...')
-
-    print('A SYNC consists of metadata about two datasets that are kept identical (synchronized)\n'
-          'by applying updates, inserts, and deletions from one to the other, and visa versa. The\n'
-          'datasets can be a feature layer in a AGOL feature service, or a feature class in a SDE\n'
-          'enterprise geodatabase. The SYNC name should generally be the same as the SDE feature\n'
-          'class it is based on., and parenthesis can be used to help identify the type of service\n'
-          'and location. For example: "(SDE/GIS2-SDE/GIS1)" indicates the parent dataset is located\n'
-          'in a SDE geodatabase on server GIS2, and the child is located on server GIS1 in SDE.\n')
-
-    print('Ensure that the two datasets are identical. This tool may not function correctly otherwise.\n')
-
-    name = ui.GetName()
-
-    numbers = ['first', 'second']
-
-    sync = {'name': name, 'first': {}, 'second': {}}
-    
-    i = 0
-
-    while(i < 2):
-        print('')
-        service = CreateNewService(cfg, i)
-        if service:
-            if service == 'loop':
-                return service
-
-            sync[numbers[i]] = service
-            i = i + 1
         else:
-            #failed to create service
-            continue
-
-    sync['last_run'] = str(datetime.now())
-
-    return sync
-
-def ReregisterSync(sync, cfg):
-    for first_second in ['first', 'second']:
-        service = sync[first_second]
-        serverGen = ValidateService(service, cfg)
-        if(serverGen):
-            sync[first_second]['servergen'] = serverGen
-            logging.info('Servergen updated!')
-        else:
+            logging.error('Edits failed. Changes may have been made.\n')
             return False
 
-    sync['last_run'] = str(datetime.now())
+        logging.info('')
+        # ui.Break()
 
-    return sync
+    def UpdateLastRun(self):
+        self.last_run = str(datetime.now())
 
-def EditSync(sync, cfg):
-    logging.info('Editing sync "{}"...'.format(sync['name']))
-    ui.PrintSyncDetails(sync)
-
-    while(True):
-        menu = ['SAVE changes', 'DISCARD changes', 'Name', 'Parent dataset ("{}")'.format(sync['first']['nickname']), 'Child dataset ("{}")'.format(sync['second']['nickname'])]
-        DONE = 1
-        CANCEL = 2
-        NAME = 3
-        PARENT_DATASET = 4
-        CHILD_DATASET = 5
-
-        choice = ui.Options('Choose an option to edit:', menu)
-
-        if(choice == NAME):
-            print('Current name: "{}"'.format(sync['name']))
-            sync['name'] = ui.GetName()
-            print('')
-
-        elif(choice == DONE):
-            menu = ['Re-register SYNC', 'DO NOT re-register', 'BACK']
-            choice = ui.Options('Would you like to re-register this sync?', menu)
-            if(choice == 1):
-                sync = ReregisterSync(sync, cfg)
-                print('')
-            elif(choice == 3):
-                continue
-
-            ui.PrintSyncDetails(sync)
-            return sync
-
-        elif(choice == CANCEL):
-            menu = ['DISCARD changes', 'BACK']
-            choice = ui.Options('Are you sure you want to discard your edits?', menu)
-            if(choice == 1):
-                return False
-
-        else:
-            if(choice == PARENT_DATASET):
-                first_second = 'first'
-                i = 0
-            elif(choice == CHILD_DATASET):
-                first_second = 'second'
-                i = 1
-
-            service = sync[first_second]
-            while True:
-
-                DONE = 1
-                TYPE = 2
-                NICKNAME = 3
-
-                if(service['type'] == 'AGOL'):
-                    ImportAGOL()
-
-                    menu = ['DONE', 'Type', 'Nickname', 'URL']
-                    URL = 4
+# def ValidateService(service, cfg):
+#     #checks that service is valid, returns serverGen if so
+#     if service['type'] == 'SDE':
+#         ImportSDE()
+#
+#         # check that featureclass exists in sde table registry
+#         print('Validating SDE featureclass...')
+#
+#         hostname = service['hostname']
+#         database = service['database']
+#         fcName = service['featureclass']
+#
+#         connection = sde.Connect(hostname, database, cfg.SQL_username, cfg.SQL_password)
+#
+#         if not connection:
+#             return False
+#
+#         evwName = sde.CheckFeatureclass(connection, fcName)
+#
+#         if (evwName):
+#             # get current information
+#             serverGen = sde.GetServergen(connection, evwName)
+#
+#             logging.info('Featureclass valid!')  # , 1)
+#         else:
+#             logging.error('Featureclass validation failed.')
+#             return False
+#
+#         return serverGen
+#
+#     elif service['type'] == 'AGOL':
+#         ImportAGOL()
+#
+#         # check that service is set up correctly
+#         token = agol.GetToken(cfg.AGOL_url, cfg.AGOL_username, cfg.AGOL_password)
+#
+#         url = service['serviceUrl']
+#         layerId = service['layerId']
+#
+#         print('Validating AGOL service...')
+#
+#         try:
+#             ready, serverGen, srid = agol.CheckService(url, layerId, token)
+#         except (HTTPError, AGOLServiceError, AGOLError, JSONDecodeError, Error) as e:
+#             logging.error('Error checking AGOL service!')
+#             logging.error(e.message)
+#             return False
+#
+#         logging.info('Feature service layer valid!')
+#
+#         return serverGen
 
 
-                    choice = ui.Options('What would you like to edit in "{}"'.format(service['nickname']), menu)
+# def CreateNewService(cfg, pc):
+#     types = ['SDE', 'AGOL', 'Back']
+#     parent_child = ['parent', 'child']
+#
+#     serviceType = ui.Options('Enter where your {} dataset is stored:'.format(parent_child[pc]), types)
+#     SDE = 1
+#     AGOL = 2
+#     BACK = 3
+#
+#     if (serviceType == BACK):  # go back to start of this funtion
+#         return 'loop'
+#
+#     elif (serviceType == SDE):
+#         # for SDE services
+#         ImportSDE()
+#
+#         sde_connect, hostname, database = GetSdeFilepath()
+#
+#         print('')
+#
+#         fcName = ui.GetFcName()
+#         if not fcName:
+#             return False
+#
+#         service = {'type': 'SDE',
+#                    'featureclass': fcName,
+#                    'sde_connect': sde_connect,
+#                    'hostname': hostname,
+#                    'database': database}
+#
+#     elif serviceType == AGOL:
+#         # for AGOL services
+#         ImportAGOL()
+#
+#         # get service details
+#
+#         print('The URL for a AGOL hosted-feature-layer sublayer can be found at nps.maps.arcgis.com.\n'
+#               'Browse to the hosted feature layer (the URL to the service will end with "FeatureServer").\n'
+#               'Then click on one of the layers on the main page. At the bottom right, the URL for the\n'
+#               'sub layer will be displayed. The hosted-feature-layer sublayer URL in the lower right\n'
+#               'will end with "Feature Server/x, where x is the sub layer ID. A list of URLs for common\n'
+#               'layers can be found at "https://tinyurl.com/48kj9ccf".\n')
+#
+#         url, layerId = ui.GetAgolURL()
+#
+#         if not url:
+#             return False
+#
+#         # layerId = raw_input('\nA feature layer consists of one or more SERVICE LAYERS. The first service layer is layer 0.\n'
+#         #                        'Enter the SERVICE LAYER ID (usually 0). System will verify the service layer:')
+#
+#         # try:
+#         #    layerId = int(layerId)
+#         # except:
+#         #    print('Please enter a number for the layer id!')
+#         #    continue
+#
+#         service = {'type': 'AGOL',
+#                    'serviceUrl': url,
+#                    'layerId': layerId}
+#
+#         # endif
+#     print('')
+#     serverGen = ValidateService(service, cfg)
+#
+#     if (serverGen):
+#         print('')
+#         nickname = ui.GetNickname()
+#
+#         service['servergen'] = serverGen
+#         service['nickname'] = nickname
+#
+#         return service
+#
+#     else:
+#         # invalid service
+#         return False
 
-                    if(choice == URL):
-                        print('Current layer URL: {}/{}'.format(service['serviceUrl'], service['layerId']))
-                        url, layerId = ui.GetAgolURL()
-                        if not url:
-                            continue
-                        service['serviceUrl'] = url
-                        service['layerId'] = layerId
-                        print('')
+# def CreateNewSync(cfg):
+#     #UI to create a new sync
+#     logging.debug('Creating sync...')
+#
+#     print('A SYNC consists of metadata about two datasets that are kept identical (synchronized)\n'
+#           'by applying updates, inserts, and deletions from one to the other, and visa versa. The\n'
+#           'datasets can be a feature layer in a AGOL feature service, or a feature class in a SDE\n'
+#           'enterprise geodatabase. The SYNC name should generally be the same as the SDE feature\n'
+#           'class it is based on., and parenthesis can be used to help identify the type of service\n'
+#           'and location. For example: "(SDE/GIS2-SDE/GIS1)" indicates the parent dataset is located\n'
+#           'in a SDE geodatabase on server GIS2, and the child is located on server GIS1 in SDE.\n')
+#
+#     print('Ensure that the two datasets are identical. This tool may not function correctly otherwise.\n')
+#
+#     name = ui.GetName()
+#
+#     numbers = ['first', 'second']
+#
+#     sync = {'name': name, 'first': {}, 'second': {}}
+#
+#     i = 0
+#
+#     while(i < 2):
+#         print('')
+#         service = CreateNewService(cfg, i)
+#         if service:
+#             if service == 'loop':
+#                 return service
+#
+#             sync[numbers[i]] = service
+#             i = i + 1
+#         else:
+#             #failed to create service
+#             continue
+#
+#     sync['last_run'] = str(datetime.now())
+#
+#     return sync
 
-                elif(service['type'] == 'SDE'):
-                    ImportSDE()
+# def ReregisterSync(sync, cfg):
+#     for first_second in ['first', 'second']:
+#         service = sync[first_second]
+#         serverGen = ValidateService(service, cfg)
+#         if(serverGen):
+#             sync[first_second]['servergen'] = serverGen
+#             logging.info('Servergen updated!')
+#         else:
+#             return False
+#
+#     sync['last_run'] = str(datetime.now())
+#
+#     return sync
 
-                    menu = ['DONE', 'Type', 'Nickname', 'SDE Connection', 'Featureclass']
-                    SDE_CONNECT = 4
-                    FEATURECLASS = 5
-
-                    choice = ui.Options('What would you like to edit in "{}"'.format(service['nickname']), menu)
-
-                    if(choice == SDE_CONNECT):
-                        print('Current .sde file: {}'.format(service['sde_connect']))
-                        sde_connect, hostname, database = GetSdeFilepath()
-                        service['sde_connect'] = sde_connect
-                        service['hostname'] = hostname
-                        service['database'] = database
-
-                        print('')
-
-                    elif(choice == FEATURECLASS):
-                        print('Current featureclass: {}'.format(service['featureclass']))
-                        fcName = ui.GetFcName()
-                        if fcName:
-                            service['featureclass'] = fcName
-
-                        print('')
-
-
-                if (choice == TYPE):
-                    #create a whole new service
-                    service = CreateNewService(cfg, i)
-                    print('')
-                    if (service == False):
-                        continue
-                    elif (service == 'loop'):
-                        break
-
-                elif (choice == NICKNAME):
-                    print('Current nickname: {}'.format(service['nickname']))
-                    nickname = ui.GetNickname()
-                    service['nickname'] = nickname
-                    print('')
-
-                elif (choice == DONE):
-                    if(ValidateService(service, cfg)):
-                        sync[first_second] = service
-                        print('')
-                        break
+# def EditSync(sync, cfg):
+#     logging.info('Editing sync "{}"...'.format(sync['name']))
+#     ui.PrintSyncDetails(sync)
+#
+#     while(True):
+#         menu = ['SAVE changes', 'DISCARD changes', 'Name', 'Parent dataset ("{}")'.format(sync['first']['nickname']), 'Child dataset ("{}")'.format(sync['second']['nickname'])]
+#         DONE = 1
+#         CANCEL = 2
+#         NAME = 3
+#         PARENT_DATASET = 4
+#         CHILD_DATASET = 5
+#
+#         choice = ui.Options('Choose an option to edit:', menu)
+#
+#         if(choice == NAME):
+#             print('Current name: "{}"'.format(sync['name']))
+#             sync['name'] = ui.GetName()
+#             print('')
+#
+#         elif(choice == DONE):
+#             menu = ['Re-register SYNC', 'DO NOT re-register', 'BACK']
+#             choice = ui.Options('Would you like to re-register this sync?', menu)
+#             if(choice == 1):
+#                 sync = ReregisterSync(sync, cfg)
+#                 print('')
+#             elif(choice == 3):
+#                 continue
+#
+#             ui.PrintSyncDetails(sync)
+#             return sync
+#
+#         elif(choice == CANCEL):
+#             menu = ['DISCARD changes', 'BACK']
+#             choice = ui.Options('Are you sure you want to discard your edits?', menu)
+#             if(choice == 1):
+#                 return False
+#
+#         else:
+#             if(choice == PARENT_DATASET):
+#                 first_second = 'first'
+#                 i = 0
+#             elif(choice == CHILD_DATASET):
+#                 first_second = 'second'
+#                 i = 1
+#
+#             service = sync[first_second]
+#             while True:
+#
+#                 DONE = 1
+#                 TYPE = 2
+#                 NICKNAME = 3
+#
+#                 if(service['type'] == 'AGOL'):
+#                     ImportAGOL()
+#
+#                     menu = ['DONE', 'Type', 'Nickname', 'URL']
+#                     URL = 4
+#
+#
+#                     choice = ui.Options('What would you like to edit in "{}"'.format(service['nickname']), menu)
+#
+#                     if(choice == URL):
+#                         print('Current layer URL: {}/{}'.format(service['serviceUrl'], service['layerId']))
+#                         url, layerId = ui.GetAgolURL()
+#                         if not url:
+#                             continue
+#                         service['serviceUrl'] = url
+#                         service['layerId'] = layerId
+#                         print('')
+#
+#                 elif(service['type'] == 'SDE'):
+#                     ImportSDE()
+#
+#                     menu = ['DONE', 'Type', 'Nickname', 'SDE Connection', 'Featureclass']
+#                     SDE_CONNECT = 4
+#                     FEATURECLASS = 5
+#
+#                     choice = ui.Options('What would you like to edit in "{}"'.format(service['nickname']), menu)
+#
+#                     if(choice == SDE_CONNECT):
+#                         print('Current .sde file: {}'.format(service['sde_connect']))
+#                         sde_connect, hostname, database = GetSdeFilepath()
+#                         service['sde_connect'] = sde_connect
+#                         service['hostname'] = hostname
+#                         service['database'] = database
+#
+#                         print('')
+#
+#                     elif(choice == FEATURECLASS):
+#                         print('Current featureclass: {}'.format(service['featureclass']))
+#                         fcName = ui.GetFcName()
+#                         if fcName:
+#                             service['featureclass'] = fcName
+#
+#                         print('')
+#
+#
+#                 if (choice == TYPE):
+#                     #create a whole new service
+#                     service = CreateNewService(cfg, i)
+#                     print('')
+#                     if (service == False):
+#                         continue
+#                     elif (service == 'loop'):
+#                         break
+#
+#                 elif (choice == NICKNAME):
+#                     print('Current nickname: {}'.format(service['nickname']))
+#                     nickname = ui.GetNickname()
+#                     service['nickname'] = nickname
+#                     print('')
+#
+#                 elif (choice == DONE):
+#                     if(ValidateService(service, cfg)):
+#                         sync[first_second] = service
+#                         print('')
+#                         break
 
 def CleanAttributes(dict_in):
     #turns all keys to lower case, removes unwanted attributes

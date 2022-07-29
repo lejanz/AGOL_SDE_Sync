@@ -117,8 +117,8 @@ def main():
 
         else:
             sync_index = choice - len(menuExtras) - 1
-            sync = syncs[sync_index]
-            n = sync['name']
+            sync = sync_functions.sync(syncs[sync_index], cfg)
+            n = sync.name
 
             menu = ['Run "{}"'.format(n), 'Backup "{}"'.format(n), 'View "{}"'.format(n), 'Edit "{}"'.format(n), 'Re-register "{}"'.format(n), 'Delete "{}"'.format(n), 'Back']
             RUN_SYNC = 1
@@ -193,87 +193,13 @@ def main():
                 continue
 
             elif (choice == RUN_SYNC):
-                # print sync counter and date
-                sync_num = GetSyncNum()
-                logging.info('Sync counter: {}'.format(sync_num))
-                # ui.printDate()
+                success = sync.run()
 
-                # increment sync counter
-                sync_num_file = open('config/syncnum.txt', 'w')
-                sync_num_file.write(str(sync_num + 1))
-                sync_num_file.close()
-
-                # get sync from syncs.json
-                logging.info('Executing sync "{}"...'.format(sync['name']))
-
-                # Extract changes from both services
-                first_deltas, first_data = sync_functions.ExtractChanges(sync['first'], cfg)
-                second_deltas, second_data = sync_functions.ExtractChanges(sync['second'], cfg)
-
-                if first_deltas == None or second_deltas == None:
-                    logging.error('Failed to extract changes.')
-                    # ui.Break()
-                    continue
-
-                # ui.Break()
-
-                # print total number of edits applied to both services
-                print('')
-                ui.PrintEdits(first_deltas, sync['first'], sync['second'])
-                ui.PrintEdits(second_deltas, sync['second'], sync['first'])
-                print('')
-
-                # ask user to confirm before applying edits
-                menu = ["Continue", "Cancel"]
-                cancel_choice = ui.Options('Please review the extracted changes above before continuing.', menu)
-
-                if cancel_choice == 2:
-                    logging.warning('Sync cancelled. No changes were made.\n')
-                    # ui.Break()
-                    continue
-
-                # LogJson('{}_to_{}_before_reconcile'.format(sync['first']['nickname'], sync['second']['nickname']), first_deltas)
-                # LogJson('{}_to_{}_before_reconcile'.format(sync['second']['nickname'], sync['first']['nickname']), second_deltas)
-
-                # reconcile changes
-                first_deltas, second_deltas = sync_functions.ResolveConflicts(first_deltas, second_deltas,
-                                                                              sync['first']['nickname'],
-                                                                              sync['second']['nickname'])
-
-                if not (first_deltas and second_deltas):
-                    logging.warning('Sync cancelled. No changes were made.\n')
-                    # ui.Break()
-                    continue
-
-                #LogJson('{}_to_{}_final'.format(sync['first']['nickname'], sync['second']['nickname']), first_deltas)
-                #LogJson('{}_to_{}_final'.format(sync['second']['nickname'], sync['first']['nickname']), second_deltas)
-
-                # Apply edits
-                second_servergen = sync_functions.ApplyEdits(sync['second'], cfg, first_deltas, sync_num,
-                                                             data=second_data)
-                first_servergen = sync_functions.ApplyEdits(sync['first'], cfg, second_deltas, sync_num,
-                                                            data=first_data)
-
-                # ui.Break()
-
-                # check success
-                if (second_servergen and first_servergen):
-                    # Update servergens
-                    logging.info('Updating servergen...')
-                    syncs[sync_index]['first']['servergen'] = first_servergen
-                    syncs[sync_index]['second']['servergen'] = second_servergen
-
-                    # record time
-                    syncs[sync_index]['last_run'] = str(datetime.now())
-
+                #update syncs.json on success
+                if success:
+                    syncs[sync_index] = sync.ToDict()
                     sync_functions.WriteSyncs(syncs)
-                    logging.info('Sync "{}" executed successfully!'.format(sync['name']))
 
-                else:
-                    logging.error('Edits failed. Changes may have been made.\n')
-
-                logging.info('')
-                # ui.Break()
                 
 if __name__ == '__main__':
     main()

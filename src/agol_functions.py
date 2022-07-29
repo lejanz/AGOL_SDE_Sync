@@ -40,8 +40,15 @@ class agol:
         self.serviceId = None
         self.srid = None
 
-        return self
 
+    def ToDict(self):
+        service = {'type': 'AGOL',
+                   'serviceUrl': self.url,
+                   'layerId': self.layer,
+                   'servergen': self.servergen,
+                   'nickname': self.nickname}
+
+        return service
 
     def GetToken(self):
         #returns token for use with further requests
@@ -187,6 +194,15 @@ class agol:
         self.srid = srid
         return serverGen
 
+    def GetServergen(self):
+        return self.ValidateService()
+
+    def UpdateServergen(self, servergen=None):
+        if not servergen:
+            servergen = self.GetServergen()
+
+        self.servergen = servergen
+
     def Backup(self, sync_num):
         logging.info('Backing up feature service...')
 
@@ -244,7 +260,7 @@ class agol:
         logging.info('Extracted AGOL changes successfully.')
         #Debug('Success.\n', 0, indent=4)
 
-        return deltas, self.srid
+        return deltas
 
     def ApplyEditsInner(self, url, layer, deltas):
 
@@ -277,7 +293,7 @@ class agol:
 
         return content
 
-    def ApplyEdits(self, deltas, sync_num):
+    def ApplyEdits(self, deltas):
         #applies edits to service, returns success boolean
 
         if self.token is None:
@@ -368,7 +384,7 @@ class agol:
             logging.warning(failed)
 
         #aquire new server gen
-        newServerGen = self.ValidateService()
+        newServerGen = self.GetServergen()
 
         return newServerGen
 
