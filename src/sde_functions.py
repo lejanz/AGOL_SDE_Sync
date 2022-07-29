@@ -400,7 +400,7 @@ class sde:
         return response
 
 
-    def CheckFeatureclass(self):
+    def ValidateService(self):
         #Checks that featureclass has globalids and is registered as versioned, returns versioned view name
 
         logging.debug('Checking "{}"...'.format(self.fcName))#, 1)
@@ -628,7 +628,7 @@ class sde:
             self.Connect()
 
         # ensure featureclass is ready to go
-        if not self.CheckFeatureclass():
+        if not self.ValidateService():
             raise Exception('Failed to validate featureclass')
 
         #get featureclass data
@@ -676,13 +676,13 @@ class sde:
 
 
               
-    def ApplyEdits(self, deltas, sync_num): #connection, fcName, deltas, datatypes):
+    def ApplyEdits(self, deltas): #connection, fcName, deltas, datatypes):
         #applies deltas to versioned view. Returns success codes and new SDE_STATE_ID
 
         #get connection data
         if self.connection == None:
             self.Connect()
-            if not self.CheckFeatureclass():
+            if not self.ValidateService():
                 return False
             self.GetDatatypes()
 
