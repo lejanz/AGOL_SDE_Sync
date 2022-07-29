@@ -4,10 +4,12 @@ import pandas as pd
 import json
 #from arcpy import FromWKT, AsShape, Delete_management, Copy_management
 from ui_functions import Debug, Completed, Break, Options, logging
+import ui_functions as ui
 import time
 from datetime import datetime
 from error import Cancelled, GUIDError
 import EsriWktConverter as ewc
+import tkFileDialog
 #import logging
 
 def RemoveNulls(dict_in):
@@ -49,6 +51,24 @@ def NoSRID():  # if SRID cannot be found, user will be asked to decide next step
 
     print('Cancelling.')
     return -1
+
+
+def GetSdeFilepath():
+    print('Selecting .sde file...')
+
+    sde_connect = tkFileDialog.askopenfilename(initialdir="N:\GIS_Data\_SDE_Connects", title="Select .sde connect file", filetypes=(("SDE Files", "*.sde"),("all files","*.*")))
+
+    try:
+        hostname, database = sde.GetServerFromSDE(sde_connect)
+    except Exception as e:
+        print("Unable to open .sde file")
+        hostname = raw_input('Enter SDE hostname (i.e. inpredwgis2):')
+        database = raw_input('Enter SDE database name (i.e. redw):')
+        return None, hostname, database
+
+    logging.info("Chose '{}'".format(sde_connect))
+
+    return sde_connect, hostname, database
 
 
 def EsriToWkt(esri):
@@ -241,6 +261,21 @@ class sde:
             self.sde_connect = service['sde_connect']
         except ValueError:
             self.sde_connect = None
+
+    def __init__(self, cfg):
+        self.cfg = cfg
+        self.connection = None
+        self.datatypes = None
+        self.evwName = None
+        self.is_valid = False
+        self.servergen = None
+        self.nickname = None
+
+        self.sde_connect, self.hostname, self.database = GetSdeFilepath()
+        print('')
+        self.fcName = ui.GetFcName()
+        if not self.fcName:
+            return False
 
     def ToDict(self):
         service = {'type': 'SDE',
@@ -454,7 +489,8 @@ class sde:
         logging.debug('Featureclass is valid.')#, 1, indent=4)
         self.evwName = evwName
         self.is_valid = True
-        return True
+
+        return self.GetServergen()
 
     def GetCurrentStateId(self):
         #returns current state id of DEFAULT version

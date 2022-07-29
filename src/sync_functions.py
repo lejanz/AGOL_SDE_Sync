@@ -1,8 +1,7 @@
 from . import ui_functions as ui
 import json
 from error import HTTPError, AGOLServiceError, AGOLError, JSONDecodeError, Error
-from  Tkinter import *
-import tkFileDialog
+
 from datetime import datetime
 
 logging = ui.logging
@@ -25,23 +24,6 @@ def ImportAGOL():
         logging.debug('Loading AGOL functions...')#, 2)
         from src.agol_functions import agol
         logging.debug('AGOL functions loaded.')#, 2, indent=4)
-
-def GetSdeFilepath():
-    print('Selecting .sde file...')
-
-    sde_connect = tkFileDialog.askopenfilename(initialdir="N:\GIS_Data\_SDE_Connects", title="Select .sde connect file", filetypes=(("SDE Files", "*.sde"),("all files","*.*")))
-
-    try:
-        hostname, database = sde.GetServerFromSDE(sde_connect)
-    except Exception as e:
-        print("Unable to open .sde file")
-        hostname = raw_input('Enter SDE hostname (i.e. inpredwgis2):')
-        database = raw_input('Enter SDE database name (i.e. redw):')
-        return None, hostname, database
-
-    logging.info("Chose '{}'".format(sde_connect))
-
-    return sde_connect, hostname, database
 
 def GetSyncNum():
     try:
@@ -108,6 +90,47 @@ class sync:
         except ValueError:
             self.last_run = 'Never run'
 
+    def __init__(self, cfg):
+    #UI to create a new sync
+        while(True):
+            logging.debug('Creating sync...')
+
+            self.cfg = cfg
+            self.services = [None, None]
+
+            print('A SYNC consists of metadata about two datasets that are kept identical (synchronized)\n'
+                  'by applying updates, inserts, and deletions from one to the other, and visa versa. The\n'
+                  'datasets can be a feature layer in a AGOL feature service, or a feature class in a SDE\n'
+                  'enterprise geodatabase. The SYNC name should generally be the same as the SDE feature\n'
+                  'class it is based on., and parenthesis can be used to help identify the type of service\n'
+                  'and location. For example: "(SDE/GIS2-SDE/GIS1)" indicates the parent dataset is located\n'
+                  'in a SDE geodatabase on server GIS2, and the child is located on server GIS1 in SDE.\n')
+
+            print('Ensure that the two datasets are identical. This tool may not function correctly otherwise.\n')
+
+            self.name = ui.GetName()
+
+            i = 0
+            loop = False
+            while(i < 2):
+                print('')
+                service = self.CreateNewService(i)
+                if service:
+                    if service == 'loop':
+                        loop = True
+                        break
+
+                    self.services[i] = service
+                    i = i + 1
+                else:
+                    #failed to create service
+                    continue
+
+            if not loop:
+                break
+
+        self.UpdateLastRun()
+
     def ToDict(self):
         sync = {
             'name': self.name,
@@ -125,6 +148,47 @@ class sync:
         elif service['type'] == 'AGOL':
             ImportAGOL()
             return agol(service, self.cfg)
+
+    def CreateNewService(self, pc):
+        types = ['SDE', 'AGOL', 'Back']
+        parent_child = ['parent', 'child']
+
+        serviceType = ui.Options('Enter where your {} dataset is stored:'.format(parent_child[pc]), types)
+        SDE = 1
+        AGOL = 2
+        BACK = 3
+
+        if (serviceType == BACK):  # go back to start of this funtion
+            return 'loop'
+
+        elif (serviceType == SDE):
+            # for SDE services
+            ImportSDE()
+            service = sde(self.cfg)
+        elif serviceType == AGOL:
+            # for AGOL services
+            ImportAGOL()
+            service = agol(self.cfg)
+
+        if not service:
+            return False
+
+        print('')
+        service.Connect()
+        serverGen = service.ValidateService()
+
+        if (serverGen):
+            print('')
+            nickname = ui.GetNickname()
+
+            service.servergen = serverGen
+            service.nickname = nickname
+
+            return service
+
+        else:
+            # invalid service
+            return False
 
     def run(self):
         # print sync counter and date

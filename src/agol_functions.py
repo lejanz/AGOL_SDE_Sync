@@ -1,6 +1,7 @@
 import json
 import requests
 from ui_functions import Debug, Completed, logging
+import ui_functions as ui
 import time
 from error import HTTPError, AGOLError, AGOLServiceError, JSONDecodeError, Error
 
@@ -40,6 +41,26 @@ class agol:
         self.serviceId = None
         self.srid = None
 
+    def __init__(self, cfg):
+        self.servergen = None
+        self.nickname = None
+        self.token = None
+        self.cfg = cfg
+        self.is_valid = False
+        self.serviceId = None
+        self.srid = None
+
+        print('The URL for a AGOL hosted-feature-layer sublayer can be found at nps.maps.arcgis.com.\n'
+              'Browse to the hosted feature layer (the URL to the service will end with "FeatureServer").\n'
+              'Then click on one of the layers on the main page. At the bottom right, the URL for the\n'
+              'sub layer will be displayed. The hosted-feature-layer sublayer URL in the lower right\n'
+              'will end with "Feature Server/x, where x is the sub layer ID. A list of URLs for common\n'
+              'layers can be found at "https://tinyurl.com/48kj9ccf".\n')
+
+        self.url, self.layer = ui.GetAgolURL()
+
+        if not self.url:
+            return False
 
     def ToDict(self):
         service = {'type': 'AGOL',

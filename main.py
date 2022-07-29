@@ -89,16 +89,14 @@ def main():
         choice = ui.Options('Select a SYNC:', menu)
 
         if (choice == CREATE_SYNC): #create new sync
-            sync = 'loop'
-            while(sync == 'loop'):
-                sync = sync_functions.CreateNewSync(cfg)
+            sync = sync_functions.sync(cfg)
 
             if(sync):
-                syncs.append(sync)
+                syncs.append(sync.ToDict())
                 sync_functions.WriteSyncs(syncs)
-                logging.info('SYNC "{}" created!'.format(sync['name']))
+                logging.info('SYNC "{}" created!'.format(sync.name))
                 print('')
-                ui.PrintSyncDetails(sync)
+                ui.PrintSyncDetails(sync.ToDict())
 
         elif (choice == HELP): #help
             import os
