@@ -3,7 +3,7 @@ import requests
 from ui_functions import Debug, Completed, logging
 import ui_functions as ui
 import time
-from error import HTTPError, AGOLError, AGOLServiceError, JSONDecodeError, Error
+from error import HTTPError, AGOLError, AGOLServiceError, JSONDecodeError, Error, Cancelled
 
 def ParseJSON(jsn):                      #json.loads with error catching
     try:
@@ -27,40 +27,37 @@ def CreateUrl(base_url, params):
     return base_url
 
 class agol:
-    def __init__(self, service, cfg):
-        if not service['type'] == 'AGOL':
-            return False
-
-        self.url = service['serviceUrl']
-        self.layer = service['layerId']
-        self.servergen = service['servergen']
-        self.nickname = service['nickname']
+    def __init__(self, cfg, service=None):
         self.token = None
         self.cfg = cfg
         self.is_valid = False
         self.serviceId = None
         self.srid = None
 
-    def __init__(self, cfg):
-        self.servergen = None
-        self.nickname = None
-        self.token = None
-        self.cfg = cfg
-        self.is_valid = False
-        self.serviceId = None
-        self.srid = None
+        if service is not None:
+            if not service['type'] == 'AGOL':
+                return False
 
-        print('The URL for a AGOL hosted-feature-layer sublayer can be found at nps.maps.arcgis.com.\n'
-              'Browse to the hosted feature layer (the URL to the service will end with "FeatureServer").\n'
-              'Then click on one of the layers on the main page. At the bottom right, the URL for the\n'
-              'sub layer will be displayed. The hosted-feature-layer sublayer URL in the lower right\n'
-              'will end with "Feature Server/x, where x is the sub layer ID. A list of URLs for common\n'
-              'layers can be found at "https://tinyurl.com/48kj9ccf".\n')
+            self.url = service['serviceUrl']
+            self.layer = service['layerId']
+            self.servergen = service['servergen']
+            self.nickname = service['nickname']
 
-        self.url, self.layer = ui.GetAgolURL()
+        else: #service is none, create new service
+            self.servergen = None
+            self.nickname = None
 
-        if not self.url:
-            return False
+            print('The URL for a AGOL hosted-feature-layer sublayer can be found at nps.maps.arcgis.com.\n'
+                  'Browse to the hosted feature layer (the URL to the service will end with "FeatureServer").\n'
+                  'Then click on one of the layers on the main page. At the bottom right, the URL for the\n'
+                  'sub layer will be displayed. The hosted-feature-layer sublayer URL in the lower right\n'
+                  'will end with "Feature Server/x, where x is the sub layer ID. A list of URLs for common\n'
+                  'layers can be found at "https://tinyurl.com/48kj9ccf".\n')
+
+            self.url, self.layer = ui.GetAgolURL()
+
+            if not self.url:
+                raise Cancelled('')
 
     def ToDict(self):
         service = {'type': 'AGOL',
@@ -70,6 +67,14 @@ class agol:
                    'nickname': self.nickname}
 
         return service
+
+    def __str__(self):
+        out = ('  Type: AGOL\n'
+               '  Nickname: {}\n'
+               '  AGOL URL: {}\n'
+               '  AGOL layer: {}\n'.format(self.nickname, self.url, self.layer))
+
+        return out
 
     def GetToken(self):
         #returns token for use with further requests
@@ -142,6 +147,8 @@ class agol:
         #returns False if service is missing capabilities
         #returns True, serverGen if service is set up correctly
 
+        logging.info('Validating feature service...')
+
         logging.debug('Checking AGOL service capabilities...')#, 1)
 
         data = {'token': self.token, 'returnUpdates': True}
@@ -151,10 +158,11 @@ class agol:
         response = requests.post(url)
 
         if(response.status_code !=  200):
-            raise HTTPError("HTTP error while checking AGOL service!", url, response.status_code)
-
-            #return False, None, None
-
+            #raise HTTPError("HTTP error while checking AGOL service!", url, response.status_code)
+            logging.error('HTTP Error while checking AGOL service! Check URL.')
+            logging.debug('URL: {}'.format(url))
+            logging.debug('Status Code: {}'.format(response.status_code))
+            return False
 
         content = ParseJSON(response.content)
 
@@ -179,13 +187,15 @@ class agol:
 
         if len(missing) > 0:                 #if any capabilities missing, raise exception
             missing = ','.join(missing)
-            raise Error('Missing capability(s): {}'.format(missing))
+            #raise Error('Missing capability(s): {}'.format(missing))
+            logging.error('Missing capability(s): {}'.format(missing))
+            return False
             #return False, None, None
 
         try:
             serverGens = content["changeTrackingInfo"]['layerServerGens']
         except:
-            print('Error extracting server gen from AGOL! URL: {}'.format(url))
+            logging.error('Error extracting server gen from AGOL! URL: {}'.format(url))
             raise
 
         serverGen = [g for g in serverGens if g['id'] == self.layer]
@@ -193,13 +203,14 @@ class agol:
         try:
             serverGen = serverGen[0]
         except:
-            raise AGOLError('Layer {} does not exist'.format(self.layer), url)
-            #return False, None, None
+            #raise AGOLError('Layer {} does not exist'.format(self.layer), url)
+            logging.error('Layer {} does not exist'.format(self.layer))
+            return False
 
         try:
             srid = content['spatialReference']['wkid']
         except:
-            print('Error extracting SRID from AGOL! URL: {}'.format(url))
+            logging.error('Error extracting SRID from AGOL! URL: {}'.format(url))
             raise
 
         try:
@@ -208,7 +219,7 @@ class agol:
             logging.error('Unable to aquire service ID!')
             raise
 
-        logging.debug('Feature service is valid.')#, 1, indent=4)
+        logging.info('Feature service is valid.')#, 1, indent=4)
 
         self.is_valid = True
         self.serviceId = serviceId

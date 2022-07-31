@@ -85,7 +85,6 @@ def main():
         HELP = 2
         EXIT = 3
 
-
         choice = ui.Options('Select a SYNC:', menu)
 
         if (choice == CREATE_SYNC): #create new sync
@@ -115,7 +114,7 @@ def main():
 
         else:
             sync_index = choice - len(menuExtras) - 1
-            sync = sync_functions.sync(syncs[sync_index], cfg)
+            sync = sync_functions.sync(cfg, syncs[sync_index])
             n = sync.name
 
             menu = ['Run "{}"'.format(n), 'Backup "{}"'.format(n), 'View "{}"'.format(n), 'Edit "{}"'.format(n), 'Re-register "{}"'.format(n), 'Delete "{}"'.format(n), 'Back']
@@ -138,19 +137,17 @@ def main():
                 print('')
 
             if (choice == VIEW_SYNC):  # view sync details
-                ui.PrintSyncDetails(sync)
+                print(sync)
 
             elif (choice == EDIT_SYNC):
-                import copy
-                sync = copy.deepcopy(sync)  # make a copy of sync so we do not alter the original
+                success = sync.edit()
 
-                sync = sync_functions.EditSync(sync, cfg)
-
-                if(sync):
-                    syncs[sync_index] = sync
-                    logging.info('Edits applied to "{}"!'.format(sync['name']))
+                if success:
+                    syncs[sync_index] = sync.ToDict()
+                    logging.info('Edits applied to "{}"!'.format(sync.name))
                     sync_functions.WriteSyncs(syncs)
                 else:
+                    sync = sync_functions.sync(cfg, syncs[sync_index])  # reacquire from json just in case
                     logging.info('Changes reverted.')
 
                 print('')
@@ -159,14 +156,14 @@ def main():
                 # ask to confirm
                 print('Re-register ONLY if you are sure that your two datasets are currently IDENTICAL!\n')
                 menu = ['Continue', 'Cancel']
-                choice = ui.Options('Re-registering sync "{}". Continue?'.format(sync['name']), menu)
+                choice = ui.Options('Re-registering sync "{}". Continue?'.format(sync.name), menu)
 
                 if choice == 1:
-                    sync = sync_functions.ReregisterSync(sync, cfg)
-                    if sync:
-                        syncs[sync_index] = sync
+                    success = sync.reregister()
+                    if success:
+                        syncs[sync_index] = sync.ToDict()
                         sync_functions.WriteSyncs(syncs)
-                        logging.info('Sync "{}" re-registered successfuly!'.format(sync['name']))
+                        logging.info('Sync "{}" re-registered successfully!'.format(sync.name))
                     else:
                         logging.info("Failed to re-register sync!")
 
@@ -193,10 +190,11 @@ def main():
             elif (choice == RUN_SYNC):
                 success = sync.run()
 
-                #update syncs.json on success
+                # update syncs.json on success
                 if success:
                     syncs[sync_index] = sync.ToDict()
                     sync_functions.WriteSyncs(syncs)
+                    logging.info('')
 
                 
 if __name__ == '__main__':

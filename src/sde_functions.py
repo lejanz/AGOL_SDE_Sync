@@ -238,44 +238,37 @@ def AskToCancel(e):  # asks to cancel edits after a failed edit
     return False
 
 class sde:
-    #def __init__(self):
-
-    #    return self
-
-    def __init__(self, service, cfg):
-        if not service['type'] == 'SDE':
-            return None
-
-        self.nickname = service['nickname']
-        self.hostname = service['hostname']
-        self.database = service['database']
-        self.fcName = service['featureclass']
-        self.servergen = service['servergen']
+    def __init__(self, cfg, service=None):
         self.cfg = cfg
         self.connection = None
         self.datatypes = None
         self.evwName = None
         self.is_valid = False
 
-        try:
-            self.sde_connect = service['sde_connect']
-        except ValueError:
-            self.sde_connect = None
+        if service is not None:
+            if not service['type'] == 'SDE':
+                return None
 
-    def __init__(self, cfg):
-        self.cfg = cfg
-        self.connection = None
-        self.datatypes = None
-        self.evwName = None
-        self.is_valid = False
-        self.servergen = None
-        self.nickname = None
+            self.nickname = service['nickname']
+            self.hostname = service['hostname']
+            self.database = service['database']
+            self.fcName = service['featureclass']
+            self.servergen = service['servergen']
 
-        self.sde_connect, self.hostname, self.database = GetSdeFilepath()
-        print('')
-        self.fcName = ui.GetFcName()
-        if not self.fcName:
-            return False
+            try:
+                self.sde_connect = service['sde_connect']
+            except ValueError:
+                self.sde_connect = None
+
+        else: #service is none, create new service
+            self.servergen = None
+            self.nickname = None
+
+            self.sde_connect, self.hostname, self.database = GetSdeFilepath()
+            print('')
+            self.fcName = ui.GetFcName()
+            if not self.fcName:
+                raise Cancelled('')
 
     def ToDict(self):
         service = {'type': 'SDE',
@@ -287,6 +280,19 @@ class sde:
                    'nickname': self.nickname }
 
         return service
+
+    def __str__(self):
+        out = ('  Type: SDE\n'
+               '  Nickname: {}\n'
+               '  SDE connect file: {}\n'
+               '  SQL Server: {}\n'
+               '  SDE Database: {}\n'
+               '  SDE featureclass: {}\n'
+               '  SDE state id: {}\n'.format(self.nickname, self.sde_connect,
+                                             self.hostname, self.database,
+                                             self.fcName, self.servergen['stateId']))
+
+        return out
 
     #gets SQL server and database from .sde file
     def GetServerFromSDE(self):
@@ -327,7 +333,7 @@ class sde:
             logging.error("Connection string: {}".format(connection_string))
             raise
 
-        logging.debug('Connected to SQL!')#, 2, indent=4)
+        logging.info('Connected to SQL!')#, 2, indent=4)
 
         self.connection = connection
 
@@ -447,7 +453,7 @@ class sde:
     def ValidateService(self):
         #Checks that featureclass has globalids and is registered as versioned, returns versioned view name
 
-        logging.debug('Checking "{}"...'.format(self.fcName))#, 1)
+        logging.info('Validating "{}"...'.format(self.fcName))#, 1)
 
         query = "SELECT imv_view_name FROM SDE_table_registry WHERE table_name = '{}'".format(self.fcName)
         data = self.ReadSQLWithDebug(query)
@@ -486,7 +492,7 @@ class sde:
             self.is_valid = False
             return False
 
-        logging.debug('Featureclass is valid.')#, 1, indent=4)
+        logging.info('Featureclass is valid.')#, 1, indent=4)
         self.evwName = evwName
         self.is_valid = True
 

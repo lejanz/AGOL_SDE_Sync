@@ -116,31 +116,6 @@ def GetFcName():
 
     return fcName
 
-
-def PrintServiceDetails(service):
-    print('  Type: {}'.format(service['type']))
-    print('  Nickname: {}'.format(service['nickname']))
-    if(service['type'] == 'AGOL'):
-        print('  AGOL URL: {}'.format(service['serviceUrl']))
-        print('  AGOL layer: {}'.format(service['layerId']))
-    else:
-        if('sde_connect' in service.keys()):
-            print('  SDE connect file: {}'.format(service['sde_connect']))
-        print('  SQL Server: {}'.format(service['hostname']))
-        print('  SDE Database: {}'.format(service['database']))
-        print('  SDE featureclass: {}'.format(service['featureclass']))
-        print('  SDE state id: {}'.format(service['servergen']['stateId']))
-
-def PrintSyncDetails(sync):
-    print('Details of sync "{}":'.format(sync['name']))
-    if ('last_run' in sync.keys()):  # for backwards compatibility with old sync.json versions
-        print("Last run: {}".format(sync['last_run']))
-    print("Parent dataset:")
-    PrintServiceDetails(sync['first'])
-    print("Child dataset:")
-    PrintServiceDetails(sync['second'])
-    print('')
-
 def Completed(attempt, attempted, completed):
     #prints number of attempted/successful adds, updates, or deletes. 
     
