@@ -95,7 +95,7 @@ def main():
                 sync_functions.WriteSyncs(syncs)
                 logging.info('SYNC "{}" created!'.format(sync.name))
                 print('')
-                ui.PrintSyncDetails(sync.ToDict())
+                print(sync)
 
         elif (choice == HELP): #help
             import os
@@ -170,7 +170,7 @@ def main():
                     print('')
 
             elif (choice == DELETE_SYNC):  # delete sync
-                nickname = sync['name']
+                nickname = sync.name
 
                 # ask to confirm
                 menu = ['Continue', 'Cancel']

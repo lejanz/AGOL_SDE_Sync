@@ -4,6 +4,8 @@ from ui_functions import Debug, Completed, logging
 import ui_functions as ui
 import time
 from error import HTTPError, AGOLError, AGOLServiceError, JSONDecodeError, Error, Cancelled
+from misc_functions import CleanJson
+
 
 def ParseJSON(jsn):                      #json.loads with error catching
     try:
@@ -288,6 +290,8 @@ class agol:
             deltas = response['edits'][0]['features']
         except AttributeError:
             raise AGOLError('Unexpected response from AGOL!\n\nResponse:\n{}\n'.format(response), url)
+
+        deltas = CleanJson(deltas, self.srid)
 
         logging.info('Extracted AGOL changes successfully.')
         #Debug('Success.\n', 0, indent=4)

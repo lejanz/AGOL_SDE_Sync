@@ -3,20 +3,617 @@ import sys
 import pandas as pd
 import json
 #from arcpy import FromWKT, AsShape, Delete_management, Copy_management
-from ui_functions import Debug, Completed, Break, Options, logging
+from ui_functions import Completed, Options, logging
 import ui_functions as ui
 import time
 from datetime import datetime
-from error import Cancelled, GUIDError
+from error import Cancelled, GUIDError, Error
 import EsriWktConverter as ewc
 import tkFileDialog
+from misc_functions import CleanJson
 #import logging
+
+
+class sde:
+    def __init__(self, cfg, service=None):
+        self.cfg = cfg
+        self.connection = None
+        self.datatypes = None
+        self.evwName = None
+        self.is_valid = False
+
+        if service is not None:
+            if not service['type'] == 'SDE':
+                return None
+
+            self.nickname = service['nickname']
+            self.hostname = service['hostname']
+            self.database = service['database']
+            self.fcName = service['featureclass']
+            self.servergen = service['servergen']
+
+            try:
+                self.sde_connect = service['sde_connect']
+            except ValueError:
+                self.sde_connect = None
+
+        else: #service is none, create new service
+            self.servergen = None
+            self.nickname = None
+
+            self.sde_connect, self.hostname, self.database = GetSdeFilepath()
+            print('')
+            self.fcName = ui.GetFcName()
+            if not self.fcName:
+                raise Cancelled('')
+
+    def ToDict(self):
+        service = {'type': 'SDE',
+                   'featureclass': self.fcName,
+                   'sde_connect': self.sde_connect,
+                   'hostname': self.hostname,
+                   'database': self.database,
+                   'servergen': self.servergen,
+                   'nickname': self.nickname }
+
+        return service
+
+    def __str__(self):
+        out = ('  Type: SDE\n'
+               '  Nickname: {}\n'
+               '  SDE connect file: {}\n'
+               '  SQL Server: {}\n'
+               '  SDE Database: {}\n'
+               '  SDE featureclass: {}\n'
+               '  SDE state id: {}\n'.format(self.nickname, self.sde_connect,
+                                             self.hostname, self.database,
+                                             self.fcName, self.servergen['stateId']))
+
+        return out
+
+    # connect to sql server
+    def Connect(self):
+        UID = self.cfg.SQL_username
+        PWD = self.cfg.SQL_password
+
+        logging.info('Connecting to SQL Server...')
+        connection_string = 'Driver={{SQL Server}};Server={};Database={};User Id={};Password={}'.format(
+            self.hostname, self.database, UID, PWD)
+        # logging.debug('SQL Connection string: "{}"\n'.format(connection_string))
+
+        try:
+            connection = pyodbc.connect(connection_string)
+        except:
+            logging.error("SQL connection error!")  # , 0, indent=4)
+            logging.error("Connection string: {}".format(connection_string))
+            raise
+
+        logging.info('Connected to SQL!')  # , 2, indent=4)
+
+        self.connection = connection
+
+    def Disconnect(self):
+        self.connection.close()
+
+    def Backup(self, sync_num):
+        logging.info("Loading arcpy (this may take a while)...")
+        import arcpy
+
+        if not self.sde_connect:
+            out_folder = "sde_connects"
+            out_file = "{}_{}.sde".format(self.hostname, self.database)
+            self.sde_connect = "{}\\{}".format(out_folder, out_file)
+
+            arcpy.CreateDatabaseConnection_management(out_folder, out_file, 'SQL_SERVER', self.hostname,
+                                                      'DATABASE_AUTH', self.cfg.SQL_username, self.cfg.SQL_password,
+                                                      'SAVE_USERNAME', self.database)
+
+
+
+            # print("SDE service does not include .sde filepath.")
+            # while(True):
+            #     sde_connect = raw_input("Enter .sde filepath for this SDE database:")
+            #     try:
+            #         server, db = GetServerFromSDE(sde_connect)
+            #     except:
+            #         print("Invalid filepath!")
+            #         continue
+            #     if not db == service['database']:
+            #         print("Database name does not match this service!")
+            #         continue
+            #     break
+
+
+        from datetime import datetime
+        ##import shutil, os
+
+        now = datetime.now()  # current date and time
+        today = now.strftime("%m%d%Y")
+
+        ##fileout = r'N:\Admin\Backup\LSync_Backup\syncs_ID'+ str(sync_num)+ '_' + str(today) + '.json'
+        ##filein = r'config\syncs.json'
+        ##shutil.copy(filein, fileout)
+
+        owner = self.GetOwner()
+
+        backup_name = '{}_BACKUP_{}_{}'.format(self.fcName, str(sync_num), today)
+
+        fcPath = '{}\\{}.{}.{}'.format(self.sde_connect, self.database, owner, self.fcName)
+        backup_path = '{}\\{}.{}}.{}'.format(self.sde_connect, self.database, owner, backup_name)
+
+        logging.debug('Creating backup at: {}'.format(backup_name))
+
+        # if FC already exists, best to delete it, and if it fail, continue
+        try:
+            arcpy.Delete_management(backup_path, "FeatureClass")
+            logging.debug('Attempting to delete feature class (in case it already exists')
+        except:
+            logging.debug('Feature class copy does not currently exist. Ok to create')
+
+        # Process:
+        arcpy.Copy_management(fcPath, backup_path, "FeatureClass")
+        logging.info("Created: " + backup_path)
+
+        #query = 'SELECT * INTO {} FROM {}_evw'.format(backup_name, fcName)
+
+        #cursor = connection.cursor()
+        #cursor.execute(query)
+
+        #print(cursor.messages)
+
+    def ValidateService(self):
+        #Checks that featureclass has globalids and is registered as versioned, returns versioned view name
+
+        logging.info('Validating "{}"...'.format(self.fcName))#, 1)
+
+        query = "SELECT imv_view_name FROM SDE_table_registry WHERE table_name = '{}'".format(self.fcName)
+        data = self.ReadSQLWithDebug(query)
+
+        if (len(data.index) < 1) or (data['imv_view_name'][0] is None):
+            logging.error("'{}' not found in SDE table registry. Check that it has been registered as versioned.\n".format(self.fcName))#, 1)
+            return False
+
+        evwName = data['imv_view_name'][0]
+        logging.debug("Versioned view name: {}".format(evwName))
+
+        datatypes = self.GetDatatypes()
+        datatypes['column_name'] = [val.lower() for val in datatypes['column_name']]
+        datatypes['data_type'] = [val.lower() for val in datatypes['data_type']]
+
+        globalid = datatypes.loc[datatypes['column_name'] == 'globalid']
+        shape = datatypes.loc[datatypes['column_name'] == 'shape']
+
+        #query = "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '{}' AND COLUMN_NAME = 'GLOBALID'".format(fcName)
+        #data = ReadSQLWithDebug(query, connection)
+
+        if (len(globalid.index) < 1):
+            logging.error('Featureclass has no global IDs!')#, 0)
+            self.is_valid = False
+            return False
+        elif not (globalid['data_type'].iloc[0] == 'uniqueidentifier'):
+            logging.warning('WARNING: GlobalID is not of type "uniqueidentifier!"')
+
+        if (len(shape.index) < 1):
+            logging.error('Featureclass has no SHAPE column!')  # , 0)
+            self.is_valid = False
+            return False
+        elif not (shape['data_type'].iloc[0] == 'geometry'):
+            logging.error('Featureclass SHAPE column is not of type "geometry"!')
+            print('Please migrate this featureclass\' storage type to "geometry".')
+            self.is_valid = False
+            return False
+
+        logging.info('Featureclass is valid.')#, 1, indent=4)
+        self.evwName = evwName
+        self.is_valid = True
+
+        return self.GetServergen()
+
+    def GetServergen(self):
+        stateId = self.GetCurrentStateId()
+        globalIds = self.GetGlobalIds()
+
+        return {'stateId': stateId, 'globalIds': globalIds}
+
+    def UpdateServergen(self, servergen=None):
+        if not servergen:
+            servergen = self.GetServergen()
+
+        self.servergen = servergen
+
+    def ExtractChanges(self):
+        #returns object lists for adds and updates, and list of objects deleted
+
+        if not self.connection:
+            self.Connect()
+
+        # ensure featureclass is ready to go
+        if not self.ValidateService():
+            raise Exception('Failed to validate featureclass')
+
+        # get featureclass data
+        self.datatypes = self.GetDatatypes()
+        srid = self.GetSRID()
+
+        if srid == -1:
+            raise Exception('Failed to acquire SRID')
+
+        # get data from previous run
+        lastGlobalIds = self.servergen['globalIds']
+        #lastState = self.servergen['stateId']
+
+        # get global ids and changes from versioned view
+        globalIds = self.GetGlobalIds()
+        changes = self.GetChanges()
+
+        # extrapolate updates and deletes
+        logging.info('Processing changes...')#, 2)
+
+        # missing ids = deletes
+        deleteIds = list(set(lastGlobalIds).difference(globalIds))
+
+        # get global ids from changes
+        changeGlobalIds = set(changes['globalid'].tolist())
+
+        # new ids = adds
+        addIds = list(changeGlobalIds.difference(lastGlobalIds))
+
+        # get rows containing adds
+        addRows = changes['globalid'].isin(addIds)
+
+        # split changes into adds and updates
+        adds = changes[addRows]
+        updates = changes[~addRows]
+
+        adds_json = SqlToJson(adds, self.datatypes)
+        updates_json = SqlToJson(updates, self.datatypes)
+
+        deltas = {"adds": adds_json, "updates": updates_json, "deleteIds": deleteIds}
+
+        CleanJson(deltas, srid)
+
+        logging.info('SDE change extraction complete.')#, 0)
+
+        return deltas
+
+    def ApplyEdits(self, deltas): #connection, fcName, deltas, datatypes):
+        #applies deltas to versioned view. Returns success codes and new SDE_STATE_ID
+
+        #get connection data
+        if self.connection == None:
+            self.Connect()
+            if not self.ValidateService():
+                return False
+            self.GetDatatypes()
+
+        #if backup:
+        #    BackupFeatureClass(service, sync_num, connection, cfg)
+
+        #get attribute names
+        columns = self.datatypes['column_name'].tolist()
+        columns = [col.lower() for col in columns]
+
+        #redefine adds and updates based on current data to avoid errors/conflicts
+        addsUpdates = deltas["adds"] + deltas["updates"]
+        globalIds = self.GetGlobalIds()
+
+        adds = []
+        updates = []
+
+        for addUpdate in addsUpdates:
+            #check for attributes that don't exist in destination
+            keys = addUpdate['attributes'].keys()
+            extra_keys = set(keys) - set(columns)
+            if len(extra_keys) > 0:
+                logging.error('Error! The following attribute fields do not exist in the destination:')
+                logging.error(','.join(extra_keys))
+                logging.error('Cancelling changes.')
+                return False
+
+            if addUpdate['attributes']['globalid'] in globalIds:
+                updates.append(addUpdate)
+            else:
+                adds.append(addUpdate)
+
+        deleteGUIDs = [delete.replace('{', '').replace('}', '') for delete in deltas["deleteIds"]]
+
+        adds = JsonToSql(adds, self.datatypes)
+        updates = JsonToSql(updates, self.datatypes)
+
+        successfulAdds = 0
+        successfulUpdates = 0
+        successfulDeletes = 0
+
+        for add in adds:
+            try:
+                rowcount = self.Add(add)
+            except Exception as e:
+                if(AskToCancel(e)):
+                    raise
+                rowcount = 0
+
+            if rowcount > 0:
+                successfulAdds += rowcount
+
+        for update in updates:
+            try:
+                rowcount = self.Update(update)
+            except Exception as e:
+                if(AskToCancel(e)):
+                    raise
+                rowcount = 0
+
+            if rowcount > 0:
+                successfulUpdates += rowcount
+
+        for GUID in deleteGUIDs:
+            try:
+                rowcount = self.Delete(GUID)
+            except Exception as e:
+                if(AskToCancel(e)):
+                    raise
+                rowcount = 0
+
+            if rowcount > 0:
+                successfulDeletes += rowcount
+
+        if(len(adds) + len(updates) + len(deleteGUIDs) > 0):  #if any edits were attempted
+            print('')
+            logging.info('SDE apply edit results:')
+            Completed('add', len(adds), successfulAdds)
+            Completed('update', len(updates), successfulUpdates)
+            Completed('delete', len(deleteGUIDs), successfulDeletes)
+            print('')
+
+            menu = ['Commit changes', 'Cancel changes']
+            choice = Options('Changes have not been committed. Commit?', menu)
+
+            if choice == 2:
+                raise Cancelled('Sync cancelled.')
+
+            self.connection.commit()
+            logging.info('Changes committed.')
+
+        servergen = self.GetServergen()
+
+        #close connection
+        self.Disconnect()
+
+        return servergen
+
+    #gets SQL server and database from .sde file
+    def GetServerFromSDE(self):
+        sde_file = self.sde_connect
+
+        f = open(sde_file, "rb")
+        server = f.read()
+        #print(server)
+        try:
+            if('\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1\x00' in server):
+                server = server.replace('\n', '')
+                db = server.split('D\x00A\x00T\x00A\x00B\x00A\x00S\x00E')[1].split('\x08\x00')[1].split('\x00\x00')[1]
+                db = db.replace('\x00', '')
+                server = server.split('s\x00q\x00l\x00s\x00e\x00r\x00v\x00e\x00r\x00:')[1].split('\x00\x00')[0]
+                server = server.replace('\x00', '')
+            else:
+                raise Exception()
+        except Exception as e:
+            raise Exception("Invalid SDE file")
+
+        self.database = db
+        self.hostname = server
+
+    #queries sql, logs query, and converts returned dataframe to lowercase
+    def ReadSQLWithDebug(self, query):
+        logging.debug('Executing SQL query: "{}"'.format(query))#, 3)
+        try:
+            df = pd.read_sql(query, self.connection)
+        except:
+            logging.error('Error excecuting SQL!\nSQL Query:"{}"\n'.format(query))
+            raise
+
+        df = LowercaseDataframe(df)
+        return df
+
+
+    def GetOwner(self):
+        query = "SELECT owner FROM sde_table_registry WHERE table_name='{}'".format(self.fcName)
+        df = self.ReadSQLWithDebug()
+        owner = df['owner'].iloc[0]
+        return owner
+
+    def GetRowcount(self):    #gets number of rows affected by most recent query
+        cursor = self.connection.cursor()
+        cursor.execute('print @@rowcount')
+        try:
+            rowcount = cursor.messages[0][1].split('[SQL Server]')[1]
+            return rowcount
+        except:
+            logging.error('Error with GetRowcount!')
+            logging.error(cursor.messages)
+            return -1
+
+
+    def GetDatatypes(self):
+        #grabs column datatypes from featureclass
+
+        query = "SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '{}'".format(self.fcName)
+        response = self.ReadSQLWithDebug(query)
+
+        #print(response)
+        self.datatypes = response
+        return response
+
+    def GetCurrentStateId(self):
+        #returns current state id of DEFAULT version
+        logging.debug('Getting current SDE state id...')#, 2)
+
+        query = "SELECT state_id FROM SDE_versions WHERE NAME='DEFAULT'" #TODO: allow for other versions?
+        response = self.ReadSQLWithDebug(query)
+
+        try:
+            state_id = int(response.iloc[0, 0])
+
+        except:
+            logging.error('Fatal error! Could not aquire current state id.')
+            raise
+
+        logging.debug('SDE state id: {}'.format(state_id))#, 2, indent=4)
+
+        return state_id
+
+
+    def GetSRID(self):
+        #gets SRID of featureclass
+
+        logging.debug('Getting SRID...')#, 2)
+
+
+        query = "SELECT TOP 1 SHAPE.STSrid FROM {}".format(self.evwName)
+        response = self.ReadSQLWithDebug(query)
+
+        try:
+            srid = int(response.iloc[0])
+        except:
+            srid = NoSRID()
+        logging.debug('SRID acquired. SRID = {}'.format(srid))#, 2, indent=4)
+
+        return srid
+
+
+    def GetGlobalIds(self):
+        #returns list of global ids existing in featureclass
+        logging.debug('Getting SDE global IDs...')#, 2)
+
+        query = "SELECT GLOBALID FROM {}".format(self.evwName)
+        globalIds = self.ReadSQLWithDebug(query)
+
+        globalIdsList = globalIds.iloc[:, 0].tolist()
+
+        #Debug(globalIdsList, 3)
+
+        logging.debug("{} global ID's acquired".format(len(globalIdsList)))#, 2, indent=4)
+
+        return globalIdsList
+
+    def GetChanges(self, stateId=None):
+        #returns rows from versioned view with state id > state
+        if not stateId:
+            stateId = self.servergen['stateId']
+
+        logging.debug('Getting changes from {} since state ID {}'.format(self.evwName, stateId))#, 2)
+
+        currentStateId = self.GetCurrentStateId()
+
+        #get rows from adds table since lastState
+        query = "SELECT * FROM {} WHERE SDE_STATE_ID > {} AND SDE_STATE_ID <= {}".format(self.evwName, stateId, currentStateId)
+        adds = self.ReadSQLWithDebug(query)
+
+        if(len(adds.index) > 0 and 'shape' in adds.columns):
+            #reaquire SHAPE column as WKT
+            query = "SELECT SHAPE.AsTextZM() FROM {} WHERE SDE_STATE_ID > {} AND SDE_STATE_ID <= {}".format(self.evwName, stateId, currentStateId)
+            shape = self.ReadSQLWithDebug(query)
+
+            #replace shape column with text
+            adds['shape'] = shape.values
+
+        return adds
+
+
+    def EditTable(self, query, expectedRowCount):
+        cursor = self.connection.cursor()
+
+        logging.debug('Editing table. SQL Query: "{}"'.format(query))#, 3)
+
+        try:
+            cursor.execute(query)
+        except:
+            logging.error('Error executing SQL!')
+            logging.error('{}'.format(cursor.messages))
+            logging.error('Executed SQL query: {}'.format(query))
+            logging.error('Rolling back SQL edits and exiting.')
+            self.connection.rollback()
+            raise
+
+        for i in range(0, 100):
+            cursor.execute('print @@rowcount')
+            rowcount = -1
+
+            try:
+                rowcount = int(cursor.messages[0][1].split('[SQL Server]')[1])
+            except:
+                logging.error('Error with GetRowcount.')
+
+            if(rowcount == expectedRowCount or rowcount != -1):
+                break
+
+        if (rowcount != expectedRowCount):
+            #raise RowcountError('Unexpected number of rows affected')
+            raise Error('Unexpected number of rows affected: {}; Expected: {}'.format(cursor.rowcount, expectedRowCount))
+            #if(raw_input("Press enter to ignore, or type anything to cancel sync") != ''):
+            #   raise Cancelled('Sync cancelled.')
+
+        return rowcount
+
+    def Add(self, dict_in):
+        #add a feature to the versioned view of a featureclass
+        keys = ','.join(dict_in.keys())
+        values = ','.join(dict_in.values())
+
+        try:
+            globalId = dict_in['globalid']
+        except NameError:
+            logging.error('ERROR! Add object has no global ID!\n')
+            print(json.dumps(dict_in))
+            raise GUIDError('Add object has no global ID!')
+
+        logging.info('Adding object {}'.format(globalId))#, 2, indent=4)
+
+        query = "INSERT INTO {} ({}) VALUES ({});".format(self.evwName, keys, values)
+
+        return self.EditTable(query, 1)
+
+    def Update(self, dict_in):
+        #update a feature in the versioned view of a featureclass
+
+        try:
+              globalId = dict_in['globalid']
+        except NameError:
+              logging.error('ERROR! Update object has no global ID!\n')
+              print(json.dumps(dict_in))
+              raise GUIDError('Update object has no global ID!')
+
+        del dict_in['globalid']
+
+        logging.info('Updating object {}'.format(globalId))
+
+        pairs = []
+
+        for k,v in dict_in.items():
+            pairs.append('{}={}'.format(k, v))
+
+        data = ','.join(pairs)
+
+        query = "UPDATE {} SET {} WHERE GLOBALID = {}".format(self.evwName, data, globalId)
+
+        return self.EditTable(query, 1)
+
+    def Delete(self, GUID):
+        #remove feature from versioned view of featureclass
+
+        logging.info("Deleting object '{}'".format(GUID))
+
+        query = "DELETE FROM  {} WHERE GLOBALID = '{}'".format(self.evwName, GUID)
+
+        return self.EditTable(query, 1)
+
 
 def RemoveNulls(dict_in):
     #returns dictionary with only non-null entries
     #dict_in = {k: v for k, v in dict_in.items()}
 
     return dict_in
+
 
 def CleanDeltas(dict_in):
     #turn all keys to lower case
@@ -228,609 +825,10 @@ def JsonToSql(deltas, datatypes):
 
     return dict_out
 
-
 def AskToCancel(e):  # asks to cancel edits after a failed edit
-    print(e.message)
-    if (raw_input("Edit failed. Press enter to ignore, or type anything to cancel sync") != ''):
+    logging.error(e.message)
+    if (raw_input("Edit failed. Press enter to ignore, or type anything to cancel sync:") != ''):
         return True
 
     logging.warning('Continuing although edit failed')
     return False
-
-class sde:
-    def __init__(self, cfg, service=None):
-        self.cfg = cfg
-        self.connection = None
-        self.datatypes = None
-        self.evwName = None
-        self.is_valid = False
-
-        if service is not None:
-            if not service['type'] == 'SDE':
-                return None
-
-            self.nickname = service['nickname']
-            self.hostname = service['hostname']
-            self.database = service['database']
-            self.fcName = service['featureclass']
-            self.servergen = service['servergen']
-
-            try:
-                self.sde_connect = service['sde_connect']
-            except ValueError:
-                self.sde_connect = None
-
-        else: #service is none, create new service
-            self.servergen = None
-            self.nickname = None
-
-            self.sde_connect, self.hostname, self.database = GetSdeFilepath()
-            print('')
-            self.fcName = ui.GetFcName()
-            if not self.fcName:
-                raise Cancelled('')
-
-    def ToDict(self):
-        service = {'type': 'SDE',
-                   'featureclass': self.fcName,
-                   'sde_connect': self.sde_connect,
-                   'hostname': self.hostname,
-                   'database': self.database,
-                   'servergen': self.servergen,
-                   'nickname': self.nickname }
-
-        return service
-
-    def __str__(self):
-        out = ('  Type: SDE\n'
-               '  Nickname: {}\n'
-               '  SDE connect file: {}\n'
-               '  SQL Server: {}\n'
-               '  SDE Database: {}\n'
-               '  SDE featureclass: {}\n'
-               '  SDE state id: {}\n'.format(self.nickname, self.sde_connect,
-                                             self.hostname, self.database,
-                                             self.fcName, self.servergen['stateId']))
-
-        return out
-
-    #gets SQL server and database from .sde file
-    def GetServerFromSDE(self):
-        sde_file = self.sde_connect
-
-        f = open(sde_file, "rb")
-        server = f.read()
-        #print(server)
-        try:
-            if('\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1\x00' in server):
-                server = server.replace('\n', '')
-                db = server.split('D\x00A\x00T\x00A\x00B\x00A\x00S\x00E')[1].split('\x08\x00')[1].split('\x00\x00')[1]
-                db = db.replace('\x00', '')
-                server = server.split('s\x00q\x00l\x00s\x00e\x00r\x00v\x00e\x00r\x00:')[1].split('\x00\x00')[0]
-                server = server.replace('\x00', '')
-            else:
-                raise Exception()
-        except Exception as e:
-            raise Exception("Invalid SDE file")
-
-        self.database = db
-        self.hostname = server
-
-
-    # connect to sql server
-    def Connect(self):
-        UID = self.cfg.SQL_username
-        PWD = self.cfg.SQL_password
-
-        logging.info('Connecting to SQL Server...')
-        connection_string = 'Driver={{SQL Server}};Server={};Database={};User Id={};Password={}'.format(self.hostname, self.database, UID, PWD)
-        #logging.debug('SQL Connection string: "{}"\n'.format(connection_string))
-
-        try:
-            connection = pyodbc.connect(connection_string)
-        except:
-            logging.error("SQL connection error!")#, 0, indent=4)
-            logging.error("Connection string: {}".format(connection_string))
-            raise
-
-        logging.info('Connected to SQL!')#, 2, indent=4)
-
-        self.connection = connection
-
-    def Disconnect(self):
-        self.connection.close()
-
-    #queries sql, logs query, and converts returned dataframe to lowercase
-    def ReadSQLWithDebug(self, query):
-        logging.debug('Executing SQL query: "{}"'.format(query))#, 3)
-        try:
-            df = pd.read_sql(query, self.connection)
-        except:
-            logging.error('Error excecuting SQL!\nSQL Query:"{}"\n'.format(query))
-            raise
-
-        df = LowercaseDataframe(df)
-        return df
-
-
-    def GetOwner(self):
-        query = "SELECT owner FROM sde_table_registry WHERE table_name='{}'".format(self.fcName)
-        df = self.ReadSQLWithDebug()
-        owner = df['owner'].iloc[0]
-        return owner
-
-
-    def Backup(self, sync_num):
-        logging.info("Loading arcpy (this may take a while)...")
-        import arcpy
-
-        if not self.sde_connect:
-            out_folder = "sde_connects"
-            out_file = "{}_{}.sde".format(self.hostname, self.database)
-            self.sde_connect = "{}\\{}".format(out_folder, out_file)
-
-            arcpy.CreateDatabaseConnection_management(out_folder, out_file, 'SQL_SERVER', self.hostname,
-                                                      'DATABASE_AUTH', self.cfg.SQL_username, self.cfg.SQL_password,
-                                                      'SAVE_USERNAME', self.database)
-
-
-
-            # print("SDE service does not include .sde filepath.")
-            # while(True):
-            #     sde_connect = raw_input("Enter .sde filepath for this SDE database:")
-            #     try:
-            #         server, db = GetServerFromSDE(sde_connect)
-            #     except:
-            #         print("Invalid filepath!")
-            #         continue
-            #     if not db == service['database']:
-            #         print("Database name does not match this service!")
-            #         continue
-            #     break
-
-
-        from datetime import datetime
-        ##import shutil, os
-
-        now = datetime.now()  # current date and time
-        today = now.strftime("%m%d%Y")
-
-        ##fileout = r'N:\Admin\Backup\LSync_Backup\syncs_ID'+ str(sync_num)+ '_' + str(today) + '.json'
-        ##filein = r'config\syncs.json'
-        ##shutil.copy(filein, fileout)
-
-        owner = self.GetOwner()
-
-        backup_name = '{}_BACKUP_{}_{}'.format(self.fcName, str(sync_num), today)
-
-        fcPath = '{}\\{}.{}.{}'.format(self.sde_connect, self.database, owner, self.fcName)
-        backup_path = '{}\\{}.{}}.{}'.format(self.sde_connect, self.database, owner, backup_name)
-
-        logging.debug('Creating backup at: {}'.format(backup_name))
-
-        # if FC already exists, best to delete it, and if it fail, continue
-        try:
-            arcpy.Delete_management(backup_path, "FeatureClass")
-            logging.debug('Attempting to delete feature class (in case it already exists')
-        except:
-            logging.debug('Feature class copy does not currently exist. Ok to create')
-
-        # Process:
-        arcpy.Copy_management(fcPath, backup_path, "FeatureClass")
-        logging.info("Created: " + backup_path)
-
-        #query = 'SELECT * INTO {} FROM {}_evw'.format(backup_name, fcName)
-
-        #cursor = connection.cursor()
-        #cursor.execute(query)
-
-        #print(cursor.messages)
-    
-
-    def GetRowcount(self):    #gets number of rows affected by most recent query
-        cursor = self.connection.cursor()
-        cursor.execute('print @@rowcount')
-        try:
-            rowcount = cursor.messages[0][1].split('[SQL Server]')[1]
-            return rowcount
-        except:
-            logging.error('Error with GetRowcount!')
-            logging.error(cursor.messages)
-            return -1
-
-
-    def GetDatatypes(self):
-        #grabs column datatypes from featureclass
-
-        query = "SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '{}'".format(self.fcName)
-        response = self.ReadSQLWithDebug(query)
-
-        #print(response)
-        self.datatypes = response
-        return response
-
-
-    def ValidateService(self):
-        #Checks that featureclass has globalids and is registered as versioned, returns versioned view name
-
-        logging.info('Validating "{}"...'.format(self.fcName))#, 1)
-
-        query = "SELECT imv_view_name FROM SDE_table_registry WHERE table_name = '{}'".format(self.fcName)
-        data = self.ReadSQLWithDebug(query)
-
-        if (len(data.index) < 1) or (data['imv_view_name'][0] is None):
-            logging.error("'{}' not found in SDE table registry. Check that it has been registered as versioned.\n".format(self.fcName))#, 1)
-            return False
-
-        evwName = data['imv_view_name'][0]
-        logging.debug("Versioned view name: {}".format(evwName))
-
-        datatypes = self.GetDatatypes()
-        datatypes['column_name'] = [val.lower() for val in datatypes['column_name']]
-        datatypes['data_type'] = [val.lower() for val in datatypes['data_type']]
-
-        globalid = datatypes.loc[datatypes['column_name'] == 'globalid']
-        shape = datatypes.loc[datatypes['column_name'] == 'shape']
-
-        #query = "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '{}' AND COLUMN_NAME = 'GLOBALID'".format(fcName)
-        #data = ReadSQLWithDebug(query, connection)
-
-        if (len(globalid.index) < 1):
-            logging.error('Featureclass has no global IDs!')#, 0)
-            self.is_valid = False
-            return False
-        elif not (globalid['data_type'].iloc[0] == 'uniqueidentifier'):
-            logging.warning('WARNING: GlobalID is not of type "uniqueidentifier!"')
-
-        if (len(shape.index) < 1):
-            logging.error('Featureclass has no SHAPE column!')  # , 0)
-            self.is_valid = False
-            return False
-        elif not (shape['data_type'].iloc[0] == 'geometry'):
-            logging.error('Featureclass SHAPE column is not of type "geometry"!')
-            print('Please migrate this featureclass\' storage type to "geometry".')
-            self.is_valid = False
-            return False
-
-        logging.info('Featureclass is valid.')#, 1, indent=4)
-        self.evwName = evwName
-        self.is_valid = True
-
-        return self.GetServergen()
-
-    def GetCurrentStateId(self):
-        #returns current state id of DEFAULT version
-        logging.debug('Getting current SDE state id...')#, 2)
-
-        query = "SELECT state_id FROM SDE_versions WHERE NAME='DEFAULT'" #TODO: allow for other versions?
-        response = self.ReadSQLWithDebug(query)
-
-        try:
-            state_id = int(response.iloc[0, 0])
-
-        except:
-            logging.error('Fatal error! Could not aquire current state id.')
-            raise
-
-        logging.debug('SDE state id: {}'.format(state_id))#, 2, indent=4)
-
-        return state_id
-
-
-    def GetSRID(self): #TODO remove fcName, just here to throw error for unchanged functions
-        #gets SRID of featureclass
-
-        logging.debug('Getting SRID...')#, 2)
-
-
-        query = "SELECT TOP 1 SHAPE.STSrid FROM {}".format(self.evwName)
-        response = self.ReadSQLWithDebug(query)
-
-        try:
-            srid = int(response.iloc[0])
-        except:
-            srid = NoSRID()
-        logging.debug('SRID acquired. SRID = {}'.format(srid))#, 2, indent=4)
-
-        return srid
-
-
-    def GetGlobalIds(self):  #TODO remove fcName, just here to throw error for unchanged functions
-        #returns list of global ids existing in featureclass
-        logging.debug('Getting SDE global IDs...')#, 2)
-
-        query = "SELECT GLOBALID FROM {}".format(self.evwName)
-        globalIds = self.ReadSQLWithDebug(query)
-
-        globalIdsList = globalIds.iloc[:, 0].tolist()
-
-        #Debug(globalIdsList, 3)
-
-        logging.debug("{} global ID's acquired".format(len(globalIdsList)))#, 2, indent=4)
-
-        return globalIdsList
-
-    def GetServergen(self):
-        stateId = self.GetCurrentStateId()
-        globalIds = self.GetGlobalIds()
-
-        return {'stateId': stateId, 'globalIds': globalIds}
-
-    def UpdateServergen(self, servergen=None):
-        if not servergen:
-            servergen = self.GetServergen()
-
-        self.servergen = servergen
-
-    def GetChanges(self, stateId=None):
-        #returns rows from versioned view with state id > state
-        if not stateId:
-            stateId = self.servergen['stateId']
-
-        logging.debug('Getting changes from {} since state ID {}'.format(self.evwName, stateId))#, 2)
-
-        currentStateId = self.GetCurrentStateId()
-
-        #get rows from adds table since lastState
-        query = "SELECT * FROM {} WHERE SDE_STATE_ID > {} AND SDE_STATE_ID <= {}".format(self.evwName, stateId, currentStateId)
-        adds = self.ReadSQLWithDebug(query)
-
-        if(len(adds.index) > 0 and 'shape' in adds.columns):
-            #reaquire SHAPE column as WKT
-            query = "SELECT SHAPE.AsTextZM() FROM {} WHERE SDE_STATE_ID > {} AND SDE_STATE_ID <= {}".format(self.evwName, stateId, currentStateId)
-            shape = self.ReadSQLWithDebug(query)
-
-            #replace shape column with text
-            adds['shape'] = shape.values
-
-        return adds
-
-
-    def EditTable(self, query, expectedRowCount):
-        cursor = self.connection.cursor()
-
-        logging.debug('Editing table. SQL Query: "{}"'.format(query))#, 3)
-
-        try:
-            cursor.execute(query)
-        except:
-            logging.error('Error executing SQL!')
-            logging.error('{}'.format(cursor.messages))
-            logging.error('Executed SQL query: {}'.format(query))
-            logging.error('Rolling back SQL edits and exiting.')
-            self.connection.rollback()
-            raise
-
-        for i in range(0, 100):
-            cursor.execute('print @@rowcount')
-            rowcount = -1
-
-            try:
-                rowcount = int(cursor.messages[0][1].split('[SQL Server]')[1])
-            except:
-                logging.error('Error with GetRowcount.')
-
-            if(rowcount == expectedRowCount or rowcount != -1):
-                break
-
-        if (rowcount != expectedRowCount):
-            #raise RowcountError('Unexpected number of rows affected')
-            logging.error('Unexpected number of rows affected: {}\n Expected: {}\n'.format(cursor.rowcount, expectedRowCount))
-            if(raw_input("Press enter to ignore, or type anything to cancel sync") != ''):
-               raise Cancelled('Sync cancelled.')
-
-        return rowcount
-
-    def Add(self, dict_in): #TODO remove fcName, just here to throw error for unchanged functions
-        #add a feature to the versioned view of a featureclass
-        keys = ','.join(dict_in.keys())
-        values = ','.join(dict_in.values())
-
-        try:
-            globalId = dict_in['globalid']
-        except NameError:
-            logging.error('ERROR! Add object has no global ID!\n')
-            print(json.dumps(dict_in))
-            raise GUIDError('Add object has no global ID!')
-
-        logging.info('Adding object {}'.format(globalId))#, 2, indent=4)
-
-        query = "INSERT INTO {} ({}) VALUES ({});".format(self.evwName, keys, values)
-
-        return self.EditTable(query, 1)
-
-    def Update(self, dict_in):
-        #update a feature in the versioned view of a featureclass
-
-        try:
-              globalId = dict_in['globalid']
-        except NameError:
-              logging.error('ERROR! Update object has no global ID!\n')
-              print(json.dumps(dict_in))
-              raise GUIDError('Update object has no global ID!')
-
-        del dict_in['globalid']
-
-        logging.info('Updating object {}'.format(globalId))#, 2, indent=4)
-
-        pairs = []
-
-        for k,v in dict_in.items():
-            pairs.append('{}={}'.format(k, v))
-
-        data = ','.join(pairs)
-
-        query = "UPDATE {} SET {} WHERE GLOBALID = {}".format(self.evwName, data, globalId) #TODO: make SRID variable
-
-        return self.EditTable(query, 1)
-    
-
-    def Delete(self, GUID):
-        #remove feature from versioned view of featureclass
-
-        logging.info("Deleting object '{}'".format(GUID))#, 2, indent=4)
-
-        query = "DELETE FROM  {} WHERE GLOBALID = '{}'".format(self.evwName, GUID)
-
-        return self.EditTable(query, 1)
-
-
-    def ExtractChanges(self):#connection, fcName, lastGlobalIds, lastState, datatypes):
-        #returns object lists for adds and updates, and list of objects deleted
-
-        if not self.connection:
-            self.Connect()
-
-        # ensure featureclass is ready to go
-        if not self.ValidateService():
-            raise Exception('Failed to validate featureclass')
-
-        #get featureclass data
-        self.datatypes = self.GetDatatypes()
-        srid = self.GetSRID()
-
-        if srid == -1:
-            raise Exception('Failed to acquire SRID')
-
-        #get data from previous run
-        lastGlobalIds = self.servergen['globalIds']
-        #lastState = self.servergen['stateId']
-
-        #get global ids and changes from versioned view
-        globalIds = self.GetGlobalIds()
-        changes = self.GetChanges()
-
-        #extrapolate updates and deletes
-        logging.info('Processing changes...')#, 2)
-
-        #missing ids = deletes
-        deleteIds = list(set(lastGlobalIds).difference(globalIds))
-
-        #get global ids from changes
-        changeGlobalIds = set(changes['globalid'].tolist())
-
-        #new ids = adds
-        addIds = list(changeGlobalIds.difference(lastGlobalIds))
-
-        #get rows containing adds
-        addRows = changes['globalid'].isin(addIds)
-
-        #split changes into adds and updates
-        adds = changes[addRows]
-        updates = changes[~addRows]
-
-        adds_json = SqlToJson(adds, self.datatypes)
-        updates_json = SqlToJson(updates, self.datatypes)
-
-        deltas = {"adds": adds_json, "updates": updates_json, "deleteIds": deleteIds}
-
-        logging.info('SDE change extraction complete.')#, 0)
-
-        return deltas
-
-    def ApplyEdits(self, deltas): #connection, fcName, deltas, datatypes):
-        #applies deltas to versioned view. Returns success codes and new SDE_STATE_ID
-
-        #get connection data
-        if self.connection == None:
-            self.Connect()
-            if not self.ValidateService():
-                return False
-            self.GetDatatypes()
-
-        #if backup:
-        #    BackupFeatureClass(service, sync_num, connection, cfg)
-
-        #get attribute names
-        columns = self.datatypes['column_name'].tolist()
-        columns = [col.lower() for col in columns]
-
-        #redefine adds and updates based on current data to avoid errors/conflicts
-        addsUpdates = deltas["adds"] + deltas["updates"]
-        globalIds = self.GetGlobalIds()
-
-        adds = []
-        updates = []
-
-        for addUpdate in addsUpdates:
-            #check for attributes that don't exist in destination
-            keys = addUpdate['attributes'].keys()
-            extra_keys = set(keys) - set(columns)
-            if len(extra_keys) > 0:
-                logging.error('Error! The following attribute fields do not exist in the destination:')
-                logging.error(','.join(extra_keys))
-                logging.error('Cancelling changes.')
-                return False
-
-            if addUpdate['attributes']['globalid'] in globalIds:
-                updates.append(addUpdate)
-            else:
-                adds.append(addUpdate)
-
-        deleteGUIDs = [delete.replace('{', '').replace('}', '') for delete in deltas["deleteIds"]]
-
-        adds = JsonToSql(adds, self.datatypes)
-        updates = JsonToSql(updates, self.datatypes)
-
-        successfulAdds = 0
-        successfulUpdates = 0
-        successfulDeletes = 0
-
-        for add in adds:
-            try:
-                rowcount = self.Add(add)
-            except Exception as e:
-                if(AskToCancel(e)):
-                    raise
-                rowcount = 0
-
-            if rowcount > 0:
-                successfulAdds += rowcount
-
-        for update in updates:
-            try:
-                rowcount = self.Update(update)
-            except Exception as e:
-                if(AskToCancel(e)):
-                    raise
-                rowcount = 0
-
-            if rowcount > 0:
-                successfulUpdates += rowcount
-
-        for GUID in deleteGUIDs:
-            try:
-                rowcount = self.Delete(GUID)
-            except Exception as e:
-                if(AskToCancel(e)):
-                    raise
-                rowcount = 0
-
-            if rowcount > 0:
-                successfulDeletes += rowcount
-
-        if(len(adds) + len(updates) + len(deleteGUIDs) > 0):  #if any edits were attempted
-            print('')
-            logging.info('SDE apply edit results:')
-            Completed('add', len(adds), successfulAdds)
-            Completed('update', len(updates), successfulUpdates)
-            Completed('delete', len(deleteGUIDs), successfulDeletes)
-            print('')
-
-            menu = ['Commit changes', 'Cancel changes']
-            choice = Options('Changes have not been committed. Commit?', menu)
-
-            if choice == 2:
-                raise Cancelled('Sync cancelled.')
-
-            self.connection.commit()
-            logging.info('Changes committed.')
-
-        servergen = self.GetServergen()
-
-        #close connection
-        self.Disconnect()
-
-        return servergen
-
-

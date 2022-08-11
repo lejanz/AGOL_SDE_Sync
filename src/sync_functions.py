@@ -78,7 +78,7 @@ def WriteSyncs(syncs):
 
 class sync:
     def __init__(self, cfg, sync_dict=None):
-        if sync is not None:
+        if sync_dict is not None:
             self.name = sync_dict['name']
             self.cfg = cfg
 
@@ -191,14 +191,6 @@ class sync:
 
         return out
 
-    def ServiceFromJson(self, service):
-        if service['type'] == 'SDE':
-            ImportSDE()
-            return sde(self.cfg, service)
-        elif service['type'] == 'AGOL':
-            ImportAGOL()
-            return agol(self.cfg, service)
-
     def run(self):
         # print sync counter and date
         sync_num = GetSyncNum()
@@ -233,12 +225,7 @@ class sync:
 
         if cancel_choice == 2:
             logging.warning('Sync cancelled. No changes were made.\n')
-            # ui.Break()
             return False
-
-        # remove unwanted attributes, etc
-        first_deltas = CleanDeltas(first_deltas)
-        second_deltas = CleanDeltas(second_deltas)
 
         # reconcile changes
         first_deltas, second_deltas = ResolveConflicts(first_deltas, second_deltas,
@@ -250,8 +237,8 @@ class sync:
             return False
 
         # Apply edits
-        second_servergen = self.services[1].ApplyEdits(first_deltas)
-        first_servergen = self.services[0].ApplyEdits(second_deltas)
+        second_servergen = self.ApplyEdits(self.services[1], first_deltas)
+        first_servergen = self.ApplyEdits(self.services[0], second_deltas)
 
         # check success
         if (second_servergen and first_servergen):
@@ -264,6 +251,7 @@ class sync:
             self.UpdateLastRun()
 
             logging.info('Sync "{}" executed successfully!'.format(self.name))
+            print('')
 
             return True
 
@@ -406,31 +394,25 @@ class sync:
     def UpdateLastRun(self):
         self.last_run = str(datetime.now())
 
+    def ServiceFromJson(self, service):
+        if service['type'] == 'SDE':
+            ImportSDE()
+            return sde(self.cfg, service)
+        elif service['type'] == 'AGOL':
+            ImportAGOL()
+            return agol(self.cfg, service)
 
-def CleanAttributes(dict_in):
-    #turns all keys to lower case, removes unwanted attributes
-    dict_in = {k.lower(): v for k, v in dict_in.items()}
+    @staticmethod
+    def ApplyEdits(service, deltas):
+    #wrapper for SQL/AGOL extract changes functions
+        if (len(deltas['adds']) + len(deltas['updates']) + len(deltas['deleteIds'])) < 1:
+            logging.info('No edits to apply to {}.'.format(service.nickname))
 
-    remove_keys = ['sde_state_id', 'objectid']
-    dict_in = {k: v for k, v in dict_in.items() if k not in remove_keys}
+        else:
+            logging.info('Applying edits to {}...'.format(service.nickname))
 
-    return dict_in
+        return service.ApplyEdits(deltas)
 
-def CleanDelta(dict_in, srid):
-    #cleans attributes and adds srid to geometry
-    dict_in['attributes'] = CleanAttributes(dict_in['attributes'])
-    dict_in['geometry']['spatialReference'] = {'wkid': srid}
-
-    return dict_in
-
-def CleanDeltas(deltas, srid):
-    for (index, add) in enumerate(deltas['adds']):
-        deltas['adds'][index] = CleanDelta(add, srid)
-
-    for (index, update) in enumerate(deltas['updates']):
-        deltas['updates'][index] = CleanDelta(update, srid)
-
-    return deltas
 
 def GetGlobalIds(dict_in):
     #pulls global ids from adds or updates dictionary, returns as set
