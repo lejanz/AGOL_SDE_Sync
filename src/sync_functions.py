@@ -1,6 +1,7 @@
-from . import ui_functions as ui
 import json
-from error import HTTPError, AGOLServiceError, AGOLError, JSONDecodeError, Error, Cancelled
+
+from src import ui_functions as ui
+from src.error import Cancelled
 
 from datetime import datetime
 
@@ -31,7 +32,7 @@ def GetSyncNum():
         sync_num = int(sync_num_file.read().strip())
         sync_num_file.close()
     except:
-        sync_num = int(raw_input('Enter starting number for sync counter:').strip())
+        sync_num = int(input('Enter starting number for sync counter:').strip())
 
     return sync_num
 

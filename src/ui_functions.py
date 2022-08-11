@@ -58,9 +58,8 @@ def printDate():
     print(datetime.now())
 
     
-def Debug(message, messageLevel, indent=0):
-    logger.debug('{}{}\n'.format((indent*' '), message), messageLevel)
-
+# def Debug(message, messageLevel, indent=0):
+#     logger.debug('{}{}\n'.format((indent*' '), message), messageLevel)
 
 def Break():
     print('----------------------')
@@ -79,12 +78,12 @@ def PrintEdits(deltas, first_service, second_service):
 
 
 def GetName():
-    name = raw_input('ENTER a name for this SYNC:')
+    name = input('ENTER a name for this SYNC:')
     return name
 
 
 def GetAgolURL():
-    url = raw_input('ENTER URL for LAYER (sublayer for the service). It ends in a integer; system will verify on next step):')
+    url = input('ENTER URL for LAYER (sublayer for the service). It ends in a integer; system will verify on next step):')
     url = url.strip()
 
     if (url.lower() == 'quit'):
@@ -102,13 +101,13 @@ def GetAgolURL():
     return url, layerId
 
 def GetNickname():
-    nickname = raw_input(
+    nickname = input(
         'Enter a nickname to track this FEATURE SERVICE (this is also used in conflict resolution).\n'
         'You may want to enter the storage location (AGOL or SDE) in parenthesis:')
     return nickname
 
 def GetFcName():
-    fcName = raw_input('Enter the name of the FEATURECLASS (system will verify it exists next):')
+    fcName = input('Enter the name of the FEATURECLASS (system will verify it exists next):')
     fcName = fcName.strip()  # remove whitespace from ends
 
     if fcName.lower() == 'quit':
@@ -148,7 +147,7 @@ def Options(prompt, menu, allow_filter=False, filter_string = ''):
         string = ', or type to filter'
 
     while True:
-        response = unicode(raw_input('Enter selection{}:'.format(string)))
+        response = input('Enter selection{}:'.format(string))
         print('')
         if(response.isnumeric()):
             response = int(response)

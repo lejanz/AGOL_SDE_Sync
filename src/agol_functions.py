@@ -1,10 +1,11 @@
 import json
 import requests
-from ui_functions import Debug, Completed, logging
-import ui_functions as ui
 import time
-from error import HTTPError, AGOLError, AGOLServiceError, JSONDecodeError, Error, Cancelled
-from misc_functions import CleanJson
+
+from src.ui_functions import Completed, logging
+import src.ui_functions as ui
+from src.error import HTTPError, AGOLError, AGOLServiceError, JSONDecodeError, Error, Cancelled
+from src.misc_functions import CleanJson
 
 
 def ParseJSON(jsn):                      #json.loads with error catching

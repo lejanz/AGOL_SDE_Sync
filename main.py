@@ -8,23 +8,10 @@
 ##    deltas: edits extracted from or applied to a service
 
 import json
-import sys
 from src import ui_functions as ui
 from src import sync_functions
-from datetime import datetime
 
 logging = ui.logging
-# logging.basicConfig(
-    # level=logging.DEBUG,
-    # format="%(message)s",
-    # handlers=[
-        # logging.FileHandler("sync.log"),
-        # logging.StreamHandler(sys.stdout)
-    # ]
-# )
-
-#sys.stdout = ui.logger
-#sys.stderr = ui.logger
 
 #load configuration file
 def LoadConfig():
@@ -41,7 +28,7 @@ def LoadConfig():
     return config
         
 def LogJson(filename, jsn): 
-    file = open('json_logs\{}.json'.format(filename), 'w')
+    file = open('json_logs\\{}.json'.format(filename), 'w')
     json.dump(jsn, file, indent=4)
     file.close()
 
@@ -51,7 +38,7 @@ def GetSyncNum():
         sync_num = int(sync_num_file.read().strip())
         sync_num_file.close()
     except:
-        sync_num = int(raw_input('Enter starting number for sync counter:').strip())
+        sync_num = int(input('Enter starting number for sync counter:').strip())
 
     return sync_num
 

@@ -11,7 +11,7 @@ class Error(Exception):   #base class for custom errors
 #AGOL
 
 class HTTPError(Error):   #invalid http response
-    def __init__(self, message, code):
+    def __init__(self, message, url, code):
         super(HTTPError, self).__init__('{}\nURL: {}\nError code: {}'.format(message, url, code))
 
 class AGOLError(Error):   #generic AGOL error
@@ -48,5 +48,5 @@ class RowcountError(Error):
         super(RowcountError, self).__init__('{}\nRowcount was {}, exptected {}'.format(message, rowcount, expectedRowCount))
 
 class GeometryConversionError(Error):
-    def __init__(self, message, geometry):
+    def __init__(self, message, query):
         super(GeometryConversionError, self).__init__('{}\nSQL Query: "{}"'.format(message, query))

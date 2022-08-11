@@ -3,14 +3,14 @@ import sys
 import pandas as pd
 import json
 #from arcpy import FromWKT, AsShape, Delete_management, Copy_management
-from ui_functions import Completed, Options, logging
-import ui_functions as ui
+from src.ui_functions import Completed, Options, logging
+import src.ui_functions as ui
 import time
 from datetime import datetime
-from error import Cancelled, GUIDError, Error
-import EsriWktConverter as ewc
-import tkFileDialog
-from misc_functions import CleanJson
+from src.error import Cancelled, GUIDError, Error
+import src.EsriWktConverter as ewc
+from tkinter.filedialog import askopenfilename
+from src.misc_functions import CleanJson
 #import logging
 
 
@@ -638,7 +638,7 @@ def NoSRID():  # if SRID cannot be found, user will be asked to decide next step
     elif choice == 3:
         while True:
             try:
-                value = int(raw_input('Enter SRID: '))
+                value = int(input('Enter SRID: '))
             except ValueError:
                 print('Please enter an integer.')
                 continue
@@ -653,14 +653,15 @@ def NoSRID():  # if SRID cannot be found, user will be asked to decide next step
 def GetSdeFilepath():
     print('Selecting .sde file...')
 
-    sde_connect = tkFileDialog.askopenfilename(initialdir="N:\GIS_Data\_SDE_Connects", title="Select .sde connect file", filetypes=(("SDE Files", "*.sde"),("all files","*.*")))
+    sde_connect = askopenfilename(initialdir="N:\\GIS_Data\\_SDE_Connects", title="Select .sde connect file",
+                                  filetypes=(("SDE Files", "*.sde"), ("all files", "*.*")))
 
     try:
         hostname, database = sde.GetServerFromSDE(sde_connect)
     except Exception as e:
         print("Unable to open .sde file")
-        hostname = raw_input('Enter SDE hostname (i.e. inpredwgis2):')
-        database = raw_input('Enter SDE database name (i.e. redw):')
+        hostname = input('Enter SDE hostname (i.e. inpredwgis2):')
+        database = input('Enter SDE database name (i.e. redw):')
         return None, hostname, database
 
     logging.info("Chose '{}'".format(sde_connect))
@@ -827,7 +828,7 @@ def JsonToSql(deltas, datatypes):
 
 def AskToCancel(e):  # asks to cancel edits after a failed edit
     logging.error(e.message)
-    if (raw_input("Edit failed. Press enter to ignore, or type anything to cancel sync:") != ''):
+    if (input("Edit failed. Press enter to ignore, or type anything to cancel sync:") != ''):
         return True
 
     logging.warning('Continuing although edit failed')

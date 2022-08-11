@@ -72,7 +72,7 @@ def EsriToWkt(esri):
         return '{} ({})'.format(geomType, ','.join(rings))
 
     else:
-        print "unexpected geometry type"
+        print("unexpected geometry type")
 
 def GetWktType(num_coordinates):  #Determines if WKT has Z and M based on number of coordinates
     hasZ = num_coordinates > 2    #Check this, might be wrong!!!! should work for z anyway. 
