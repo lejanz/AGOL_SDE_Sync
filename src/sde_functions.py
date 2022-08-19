@@ -829,7 +829,7 @@ def JsonToSql(deltas, datatypes):
     return dict_out
 
 def AskToCancel(e):  # asks to cancel edits after a failed edit
-    logging.error(e.message)
+    logging.error(str(e))
     if (input("Edit failed. Press enter to ignore, or type anything to cancel sync:") != ''):
         return True
 
