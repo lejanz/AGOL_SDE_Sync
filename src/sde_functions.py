@@ -34,7 +34,7 @@ class sde:
 
             try:
                 self.sde_connect = service['sde_connect']
-            except ValueError:
+            except KeyError:
                 self.sde_connect = None
 
         else: #service is none, create new service

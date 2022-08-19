@@ -8,10 +8,10 @@ from src.error import HTTPError, AGOLError, AGOLServiceError, JSONDecodeError, E
 from src.misc_functions import CleanJson
 
 
-def ParseJSON(jsn):                      #json.loads with error catching
+def ParseJSON(jsn):                      # json.loads with error catching
     try:
         return json.loads(jsn)
-    except ValueError:                   #catch json decode error and print response for debugging hellp
+    except ValueError:                   # catch json decode error and print response for debugging hellp
         logging.error('Error parsing JSON!')
         logging.error('JSON: {}'.format(jsn))
         raise JSONDecodeError('Error parsing JSON!')
@@ -46,7 +46,7 @@ class agol:
             self.servergen = service['servergen']
             self.nickname = service['nickname']
 
-        else: #service is none, create new service
+        else: # service is none, create new service
             self.servergen = None
             self.nickname = None
 
@@ -80,7 +80,7 @@ class agol:
         return out
 
     def GetToken(self):
-        #returns token for use with further requests
+        # returns token for use with further requests
 
         logging.debug('Getting AGOL token...')#, 2)
 
@@ -96,7 +96,7 @@ class agol:
             logging.error(response)
             raise AGOLError('Failed to acquire token.', url)
 
-        logging.debug('Token acquired.')#, 2, indent=4)
+        logging.debug('Token acquired.')
 
         self.token = response['token']
 
@@ -104,11 +104,11 @@ class agol:
         self.GetToken()
 
     def ApiCall(self, url, data): #, serverGen):
-        #performs async rest api call
+        # performs async rest api call
         if not url:
             url = self.url
 
-        logging.debug('Sending AGOL API request...')#, 2)
+        logging.debug('Sending AGOL API request...')
 
         url = CreateUrl(url, data)
         response = requests.post(url)
@@ -120,11 +120,11 @@ class agol:
         while True:
             time.sleep(3)
 
-            logging.debug('Checking status URL...')#, 2, indent=4)
+            logging.debug('Checking status URL...')
             response = requests.post(url)
             content = ParseJSON(response.content)
 
-            logging.debug('Status: {}'.format(content['status']))#, 2, indent=6)
+            logging.debug('Status: {}'.format(content['status']))
 
             if (content["status"] != 'Pending'):
                 break
@@ -133,22 +133,22 @@ class agol:
             raise AGOLServiceError(content, url)
 
         else:
-            logging.debug('Getting result...')#, 2, indent=4)
+            logging.debug('Getting result...')
 
             url = content['resultUrl']
             url = CreateUrl(url, data)
 
             response = requests.post(url)
             content = ParseJSON(response.content)
-            #print(json.dumps(content, indent=4))
-            logging.debug('API response received')#, 2, indent=4)
+            # print(json.dumps(content, indent=4))
+            logging.debug('API response received')
 
         return content
 
     def ValidateService(self): #, serverGen):
-        #returns None if issue with service
-        #returns False if service is missing capabilities
-        #returns True, serverGen if service is set up correctly
+        # returns None if issue with service
+        # returns False if service is missing capabilities
+        # returns True, serverGen if service is set up correctly
 
         logging.info('Validating feature service...')
 
@@ -161,39 +161,32 @@ class agol:
         response = requests.post(url)
 
         if(response.status_code !=  200):
-            #raise HTTPError("HTTP error while checking AGOL service!", url, response.status_code)
+            # raise HTTPError("HTTP error while checking AGOL service!", url, response.status_code)
             logging.error('HTTP Error while checking AGOL service! Check URL.')
             logging.debug('URL: {}'.format(url))
             logging.debug('Status Code: {}'.format(response.status_code))
             return False
 
         content = ParseJSON(response.content)
+        keys = content.keys()
 
-        #print(json.dumps(content, indent=4))
-
-        if(not content.has_key('capabilities')):       #check if service returned capabilities
-            if(content.has_key('error')):              #check if service returned an error
+        if 'capabilities' not in keys:       # check if service returned capabilities
+            if 'error' in keys:              # check if service returned an error
                 raise AGOLServiceError(content, url)
-            else:                                      #raise generic AGOL Error
+            else:                                      # raise generic AGOL Error
                 raise(AGOLError('AGOL Service did not respond with "capabilities!"', url))
 
         capabilities = content['capabilities']
         capabilities = capabilities.lower()
 
-        required = ['update', 'changetracking', 'create', 'delete', 'update', 'editing']  #cabilitities we want
+        required = ['update', 'changetracking', 'create', 'delete', 'update', 'editing']  # cabilitities we want
 
+        missing = set(required) - set(capabilities.split(','))   # check that service has all required capabilities
 
-        missing = set(required) - set(capabilities.split(','))   #check that service has all required capabilities
-        #for req in required:
-        #    if not req in capabilities:
-        #        missing.append(req)
-
-        if len(missing) > 0:                 #if any capabilities missing, raise exception
+        if len(missing) > 0:                 # if any capabilities missing, raise exception
             missing = ','.join(missing)
-            #raise Error('Missing capability(s): {}'.format(missing))
             logging.error('Missing capability(s): {}'.format(missing))
             return False
-            #return False, None, None
 
         try:
             serverGens = content["changeTrackingInfo"]['layerServerGens']
@@ -206,7 +199,7 @@ class agol:
         try:
             serverGen = serverGen[0]
         except:
-            #raise AGOLError('Layer {} does not exist'.format(self.layer), url)
+            # raise AGOLError('Layer {} does not exist'.format(self.layer), url)
             logging.error('Layer {} does not exist'.format(self.layer))
             return False
 
@@ -222,7 +215,7 @@ class agol:
             logging.error('Unable to aquire service ID!')
             raise
 
-        logging.info('Feature service is valid.')#, 1, indent=4)
+        logging.info('Feature service is valid.')
 
         self.is_valid = True
         self.serviceId = serviceId
@@ -267,15 +260,15 @@ class agol:
         logging.info(exportUrl)
 
     def ExtractChanges(self):
-        #extracts changes since specified serverGen and returns them as an object
+        # extracts changes since specified serverGen and returns them as an object
 
-        #aquire token
+        # aquire token
         self.GetToken()
 
-        #check service and aquire data
+        # check service and acquire data
         newServerGen = self.ValidateService()
 
-        data  = {'token': self.token,
+        data = {'token': self.token,
                 'layers': [self.layer],
                 'returnInserts': 'true',
                 'returnUpdates': 'true',
@@ -295,7 +288,7 @@ class agol:
         deltas = CleanJson(deltas, self.srid)
 
         logging.info('Extracted AGOL changes successfully.')
-        #Debug('Success.\n', 0, indent=4)
+        # Debug('Success.\n', 0, indent=4)
 
         return deltas
 
@@ -311,11 +304,11 @@ class agol:
 
         url += '/applyEdits?f=json'
 
-        #url = CreateUrl(url, data)
+        # url = CreateUrl(url, data)
 
-        logging.debug('URL: {}'.format(url))#, 3)
+        logging.debug('URL: {}'.format(url))  # , 3)
 
-        response = requests.post(url, data=data) #, json={'edits': deltas})
+        response = requests.post(url, data=data)  # , json={'edits': deltas})
 
         if(response.status_code != 200):
             raise(HTTPError('Error while applying edits!', url, response.status_code))
@@ -325,37 +318,34 @@ class agol:
 
         if 'error' in content.keys():
             raise AGOLServiceError(content, url)
-           # print('Error: {}\n{}'.format(json.dumps(content['error'], indent=4)))
-           # return False
+            # print('Error: {}\n{}'.format(json.dumps(content['error'], indent=4)))
+            # return False
 
         return content
 
     def ApplyEdits(self, deltas):
-        #applies edits to service, returns success boolean
+        # applies edits to service, returns success boolean
 
         if self.token is None:
             self.GetToken()
             self.ValidateService()
 
-        #if backup:
+        # if backup:
         #    Backup(cfg.AGOL_url, cfg.AGOL_username, serviceId, token, layer)
 
-        #if not agol.ApplyEdits(service['serviceUrl'], service['layerId'], token, deltas):
+        # if not agol.ApplyEdits(service['serviceUrl'], service['layerId'], token, deltas):
         #    return Fals
 
-        #calculate numbers of adds
+        # calculate numbers of adds
         numAdds = len(deltas['adds'])
         numUpdates = len(deltas['updates'])
         numDeletes = len(deltas['deleteIds'])
 
-        #rename deleteIds to deletes (AGOL syntax)
+        # rename deleteIds to deletes (AGOL syntax)
         deltas['deletes'] = deltas.pop('deleteIds')
 
-        #apply edits
+        # apply edits
         content = self.ApplyEditsInner(self.url, self.layer, deltas)
-
-        #if not content:
-        #   return False
 
         success = True
         tryAsAdd = []
@@ -366,12 +356,12 @@ class agol:
         logging.debug('Checking results of apply edits...')
 
         for results in ['addResults', 'updateResults', 'deleteResults']:
-            if (content.has_key(results)):
+            if results in content.keys():
                 for result in content[results]:
                     if not result['success']:
-                        #check for updates that should have been adds
-                        if(results == 'updateResults' and result['error']['code'] == 1019):
-                            #print('trying as add')
+                        # check for updates that should have been adds
+                        if (results == 'updateResults') and (result['error']['code'] == 1019):
+                            # print('trying as add')
                             tryAsAdd.append(result['globalId'])
                         else:
                             print(result['error'])
@@ -388,23 +378,20 @@ class agol:
             Completed('delete', numDeletes, successful['deleteResults'])
             print('')
 
-        #try all updates that reported error 1019 as adds
+        # try all updates that reported error 1019 as adds
         if len(tryAsAdd) > 0:
             logging.info('Retrying {} failed updates as adds.'.format(len(tryAsAdd)))#, 2)
 
             newAdds = [update for update in deltas['updates'] if update['attributes']['globalid'] in tryAsAdd]
-
             newDeltas = {'adds': newAdds}
 
             content = self.ApplyEditsInner(self.url, self.layer, newDeltas)
-
             if not content:
                 return False
 
-            successful = 0
-
             logging.debug('Checking result of new add attempts...')
 
+            successful = 0
             for result in content['addResults']:
                 if not result['success']:
                     print(result['error'])
@@ -420,7 +407,7 @@ class agol:
             logging.warning('GUIDs of failed edits:')
             logging.warning(failed)
 
-        #aquire new server gen
+        # acquire new server gen
         newServerGen = self.GetServergen()
 
         return newServerGen
