@@ -288,7 +288,6 @@ class agol:
         deltas = CleanJson(deltas, self.srid)
 
         logging.info('Extracted AGOL changes successfully.')
-        # Debug('Success.\n', 0, indent=4)
 
         return deltas
 

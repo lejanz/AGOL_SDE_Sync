@@ -54,7 +54,7 @@ class sde:
                    'hostname': self.hostname,
                    'database': self.database,
                    'servergen': self.servergen,
-                   'nickname': self.nickname }
+                   'nickname': self.nickname}
 
         return service
 
@@ -409,7 +409,7 @@ class sde:
         try:
             df = pd.read_sql(query, self.connection)
         except:
-            logging.error('Error excecuting SQL!\nSQL Query:"{}"\n'.format(query))
+            logging.error('Error excecuting SQL!\nSQL Query:"{}"'.format(query))
             raise
 
         df = LowercaseDataframe(df)
@@ -527,10 +527,10 @@ class sde:
 
         try:
             cursor.execute(query)
-        except:
+        except Exception as e:
             logging.error('Error executing SQL!')
-            logging.error('{}'.format(cursor.messages))
             logging.error('Executed SQL query: {}'.format(query))
+            logging.error('SQL Error message: {}'.format(e.message))
             logging.error('Rolling back SQL edits and exiting.')
             self.connection.rollback()
             raise
@@ -549,6 +549,7 @@ class sde:
 
         if (rowcount != expectedRowCount):
             #raise RowcountError('Unexpected number of rows affected')
+            print(cursor.messages)
             raise Error('Unexpected number of rows affected: {}; Expected: {}'.format(cursor.rowcount, expectedRowCount))
             #if(raw_input("Press enter to ignore, or type anything to cancel sync") != ''):
             #   raise Cancelled('Sync cancelled.')
