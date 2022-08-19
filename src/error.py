@@ -3,6 +3,7 @@
 class Error(Exception):   #base class for custom errors
     def __init__(self, message):
         self.msg = message
+        self.message = message  # lol
         super(Error, self).__init__(message)
 
     def __str__(self):

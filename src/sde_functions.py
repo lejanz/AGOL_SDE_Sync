@@ -543,14 +543,15 @@ class sde:
                 rowcount = int(cursor.messages[0][1].split('[SQL Server]')[1])
             except:
                 logging.error('Error with GetRowcount.')
+                break
 
-            if(rowcount == expectedRowCount or rowcount != -1):
+            if (rowcount == expectedRowCount) or (rowcount != -1):
                 break
 
         if (rowcount != expectedRowCount):
             #raise RowcountError('Unexpected number of rows affected')
             print(cursor.messages)
-            raise Error('Unexpected number of rows affected: {}; Expected: {}'.format(cursor.rowcount, expectedRowCount))
+            raise Error('Unexpected number of rows affected: {}; Expected: {}'.format(rowcount, expectedRowCount))
             #if(raw_input("Press enter to ignore, or type anything to cancel sync") != ''):
             #   raise Cancelled('Sync cancelled.')
 
