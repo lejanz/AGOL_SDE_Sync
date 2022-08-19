@@ -530,10 +530,13 @@ class sde:
         except Exception as e:
             logging.error('Error executing SQL!')
             logging.error('Executed SQL query: {}'.format(query))
-            logging.error('SQL Error message: {}'.format(e.message))
+            logging.error('SQL Error message: {}'.format(str(e)))
             logging.error('Rolling back SQL edits and exiting.')
             self.connection.rollback()
             raise
+
+        messages = cursor.messages
+        print(messages)
 
         for i in range(0, 100):
             cursor.execute('print @@rowcount')
@@ -541,24 +544,21 @@ class sde:
 
             try:
                 rowcount = int(cursor.messages[0][1].split('[SQL Server]')[1])
-            except:
+            except Exception:
                 logging.error('Error with GetRowcount.')
                 break
 
             if (rowcount == expectedRowCount) or (rowcount != -1):
                 break
 
-        if (rowcount != expectedRowCount):
-            #raise RowcountError('Unexpected number of rows affected')
-            print(cursor.messages)
+        if rowcount != expectedRowCount:
+            print(messages)
             raise Error('Unexpected number of rows affected: {}; Expected: {}'.format(rowcount, expectedRowCount))
-            #if(raw_input("Press enter to ignore, or type anything to cancel sync") != ''):
-            #   raise Cancelled('Sync cancelled.')
 
         return rowcount
 
     def Add(self, dict_in):
-        #add a feature to the versioned view of a featureclass
+        # add a feature to the versioned view of a featureclass
         keys = ','.join(dict_in.keys())
         values = ','.join(dict_in.values())
 
