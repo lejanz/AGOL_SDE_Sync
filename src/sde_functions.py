@@ -534,9 +534,8 @@ class sde:
             logging.error('Rolling back SQL edits and exiting.')
             self.connection.rollback()
             raise
-
+        
         messages = cursor.messages
-        print(messages)
 
         for i in range(0, 100):
             cursor.execute('print @@rowcount')

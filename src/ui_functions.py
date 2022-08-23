@@ -69,7 +69,7 @@ def PrintEdits(deltas, first_service, second_service):
     num_adds = len(deltas['adds'])
     num_updates = len(deltas['updates'])
     num_deletes = len(deltas['deleteIds'])
-    print("{} adds, {} updates, and {} deletes will be applied from {} to {}.".format(num_adds,
+    logging.info("{} adds, {} updates, and {} deletes will be applied from {} to {}.".format(num_adds,
                                                                                         num_updates,
                                                                                         num_deletes,
                                                                                         first_service.nickname,

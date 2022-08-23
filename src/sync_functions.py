@@ -206,58 +206,66 @@ class sync:
         # get sync from syncs.json
         logging.info('Executing sync "{}"...'.format(self.name))
 
-        # Extract changes from both services
-        first_deltas = self.services[0].ExtractChanges()
-        second_deltas = self.services[1].ExtractChanges()
+        try:
+            # Extract changes from both services
+            first_deltas = self.services[0].ExtractChanges()
+            second_deltas = self.services[1].ExtractChanges()
 
-        if not (first_deltas and second_deltas):
-            logging.error('Failed to extract changes.')
-            return False
+            if not (first_deltas and second_deltas):
+                logging.error('Failed to extract changes.')
+                return False
 
-        # print total number of edits applied to both services
-        print('')
-        ui.PrintEdits(first_deltas, self.services[0], self.services[1])
-        ui.PrintEdits(second_deltas, self.services[1], self.services[0])
-        print('')
-
-        # ask user to confirm before applying edits
-        menu = ["Continue", "Cancel"]
-        cancel_choice = ui.Options('Please review the extracted changes above before continuing.', menu)
-
-        if cancel_choice == 2:
-            logging.warning('Sync cancelled. No changes were made.\n')
-            return False
-
-        # reconcile changes
-        first_deltas, second_deltas = ResolveConflicts(first_deltas, second_deltas,
-                                                       self.services[0].nickname,
-                                                       self.services[1].nickname)
-
-        if not (first_deltas and second_deltas):
-            logging.warning('Sync cancelled. No changes were made.\n')
-            return False
-
-        # Apply edits
-        second_servergen = self.ApplyEdits(self.services[1], first_deltas)
-        first_servergen = self.ApplyEdits(self.services[0], second_deltas)
-
-        # check success
-        if (second_servergen and first_servergen):
-            # Update servergens
-            logging.info('Updating servergen...')
-            self.services[0].UpdateServergen(servergen=first_servergen)
-            self.services[1].UpdateServergen(servergen=second_servergen)
-
-            # record time
-            self.UpdateLastRun()
-
-            logging.info('Sync "{}" executed successfully!'.format(self.name))
+            # print total number of edits applied to both services
+            print('')
+            ui.PrintEdits(first_deltas, self.services[0], self.services[1])
+            ui.PrintEdits(second_deltas, self.services[1], self.services[0])
             print('')
 
-            return True
+            # ask user to confirm before applying edits
+            menu = ["Continue", "Cancel"]
+            cancel_choice = ui.Options('Please review the extracted changes above before continuing.', menu)
 
-        else:
-            logging.error('Edits failed. Changes may have been made.\n')
+            if cancel_choice == 2:
+                logging.warning('Sync cancelled. No changes were made.\n')
+                return False
+
+            # reconcile changes
+            first_deltas, second_deltas = ResolveConflicts(first_deltas, second_deltas,
+                                                           self.services[0].nickname,
+                                                           self.services[1].nickname)
+
+            if not (first_deltas and second_deltas):
+                logging.warning('Sync cancelled. No changes were made.\n')
+                return False
+
+            # Apply edits
+            second_servergen = self.ApplyEdits(self.services[1], first_deltas)
+            first_servergen = self.ApplyEdits(self.services[0], second_deltas)
+
+            # check success
+            if (second_servergen and first_servergen):
+                # Update servergens
+                logging.info('Updating servergen...')
+                self.services[0].UpdateServergen(servergen=first_servergen)
+                self.services[1].UpdateServergen(servergen=second_servergen)
+
+                # record time
+                self.UpdateLastRun()
+
+                logging.info('Sync "{}" executed successfully!'.format(self.name))
+                print('')
+
+                return True
+
+            else:
+                logging.error('Edits failed. Changes may have been made.')
+                print('')
+                return False
+            
+
+        except Cancelled as e:
+            logging.info(e.message)
+            print('')
             return False
 
     def reregister(self):
