@@ -165,13 +165,6 @@ class sync:
                 if not loop:
                     break
 
-            first_type = self.services[0].ToDict()['type']
-            second_type = self.services[1].ToDict()['type']
-            if first_type == 'AGOL' and second_type == 'SDE':
-                self.services[1].Connect()
-                self.services[1].Validate()
-                self.services[1].GetSRID()
-
             self.UpdateLastRun()
 
     def ToDict(self):
@@ -210,6 +203,21 @@ class sync:
         logging.info('Executing sync "{}"...'.format(self.name))
 
         try:
+            # validate both services
+            first_valid = self.services[0].Validate()
+            second_valid = self.services[1].Validate()
+
+            if not (first_valid and second_valid):
+                return False
+
+            # set AGOL to export changes in correct SRID
+            first_type = self.services[0].ToDict()['type']
+            second_type = self.services[1].ToDict()['type']
+            if first_type == 'AGOL' and second_type == 'SDE':
+                self.services[0].to_srid = self.services[1].GetSRID()
+            elif second_type == 'AGOL' and first_type == 'SDE':
+                self.services[1].to_srid = self.services[0].GetSRID() 
+
             # Extract changes from both services
             first_deltas = self.services[0].ExtractChanges()
             second_deltas = self.services[1].ExtractChanges()
@@ -264,11 +272,10 @@ class sync:
                 logging.error('Edits failed. Changes may have been made.')
                 print('')
                 return False
-            
 
         except Cancelled as e:
             logging.info(e.message)
-            print(' ')
+            print('')
             return False
 
     def reregister(self):

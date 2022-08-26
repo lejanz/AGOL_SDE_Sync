@@ -36,6 +36,7 @@ class agol:
         self.is_valid = False
         self.serviceId = None
         self.srid = None
+        self.to_srid = None
 
         if service is not None:
             if not service['type'] == 'AGOL':
@@ -101,7 +102,8 @@ class agol:
         self.token = response['token']
 
     def Connect(self):
-        self.GetToken()
+        if self.token is None:
+            self.GetToken()
 
     def ApiCall(self, url, data): #, serverGen):
         # performs async rest api call
@@ -150,17 +152,16 @@ class agol:
         # returns False if service is missing capabilities
         # returns True, serverGen if service is set up correctly
 
+        self.Connect()
+
         logging.info('Validating feature service...')
 
         logging.debug('Checking AGOL service capabilities...')#, 1)
-
         data = {'token': self.token, 'returnUpdates': True}
-
         url = CreateUrl(self.url, data)
-
         response = requests.post(url)
 
-        if(response.status_code !=  200):
+        if response.status_code != 200:
             # raise HTTPError("HTTP error while checking AGOL service!", url, response.status_code)
             logging.error('HTTP Error while checking AGOL service! Check URL.')
             logging.debug('URL: {}'.format(url))
@@ -212,7 +213,7 @@ class agol:
         try:
             serviceId = content['serviceItemId']
         except NameError:
-            logging.error('Unable to aquire service ID!')
+            logging.error('Unable to acquire service ID!')
             raise
 
         logging.info('Feature service is valid.')
@@ -266,7 +267,8 @@ class agol:
         self.GetToken()
 
         # check service and acquire data
-        newServerGen = self.ValidateService()
+        # now done in sync.run()
+        # newServerGen = self.ValidateService()
 
         data = {'token': self.token,
                 'layers': [self.layer],
@@ -276,8 +278,13 @@ class agol:
                 'layerServerGens': json.dumps([self.servergen]),
                 'dataFormat': 'json'}
 
-        url = self.url + '/extractChanges'
+        if self.to_srid is not None:
+            data['outSR'] = self.to_srid
+            srid = self.to_srid
+        else:
+            srid = self.srid
 
+        url = self.url + '/extractChanges'
         response = self.ApiCall(url, data)
 
         try:
@@ -285,7 +292,7 @@ class agol:
         except AttributeError:
             raise AGOLError('Unexpected response from AGOL!\n\nResponse:\n{}\n'.format(response), url)
 
-        deltas = CleanJson(deltas, self.srid)
+        deltas = CleanJson(deltas, srid)
 
         logging.info('Extracted AGOL changes successfully.')
 

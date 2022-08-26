@@ -177,6 +177,8 @@ class sde:
         if not self.is_valid:
             logging.info('Validating "{}"...'.format(self.fcName))#, 1)
 
+            self.Connect()
+
             query = "SELECT imv_view_name FROM SDE_table_registry WHERE table_name = '{}'".format(self.fcName)
             data = self.ReadSQLWithDebug(query)
 
@@ -235,12 +237,12 @@ class sde:
     def ExtractChanges(self):
         #returns object lists for adds and updates, and list of objects deleted
 
-        if not self.connection:
-            self.Connect()
+        self.Connect()
 
         # ensure featureclass is ready to go
-        if not self.ValidateService():
-            raise Exception('Failed to validate featureclass')
+        # now done in sync.run()
+        #if not self.ValidateService():
+        #    raise Exception('Failed to validate featureclass')
 
         # get featureclass data
         self.datatypes = self.GetDatatypes()
@@ -291,7 +293,7 @@ class sde:
         #applies deltas to versioned view. Returns success codes and new SDE_STATE_ID
 
         #get connection data
-        if self.connection == None:
+        if self.connection is None:
             self.Connect()
             if not self.ValidateService():
                 return False
