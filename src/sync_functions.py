@@ -204,8 +204,8 @@ class sync:
 
         try:
             # validate both services
-            first_valid = self.services[0].Validate()
-            second_valid = self.services[1].Validate()
+            first_valid = self.services[0].ValidateService()
+            second_valid = self.services[1].ValidateService()
 
             if not (first_valid and second_valid):
                 return False
