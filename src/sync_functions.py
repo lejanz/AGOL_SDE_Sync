@@ -188,6 +188,8 @@ class sync:
                'Child dataset:\n'
                '{}'.format(self.name, self.last_run, first, second))
 
+        return out
+
     def run(self):
         # print sync counter and date
         sync_num = GetSyncNum()

@@ -42,7 +42,7 @@ class sde:
             except:
                 self.srid = None
 
-        else: #service is none, create new service
+        else: # service is none, create new service
             self.servergen = None
             self.nickname = None
 
@@ -289,24 +289,24 @@ class sde:
 
         return deltas
 
-    def ApplyEdits(self, deltas): #connection, fcName, deltas, datatypes):
-        #applies deltas to versioned view. Returns success codes and new SDE_STATE_ID
+    def ApplyEdits(self, deltas): # connection, fcName, deltas, datatypes):
+        # applies deltas to versioned view. Returns success codes and new SDE_STATE_ID
 
-        #get connection data
+        # get connection data
         if self.connection is None:
             self.Connect()
             if not self.ValidateService():
                 return False
             self.GetDatatypes()
 
-        #if backup:
+        # if backup:
         #    BackupFeatureClass(service, sync_num, connection, cfg)
 
-        #get attribute names
+        # get attribute names
         columns = self.datatypes['column_name'].tolist()
         columns = [col.lower() for col in columns]
 
-        #redefine adds and updates based on current data to avoid errors/conflicts
+        # redefine adds and updates based on current data to avoid errors/conflicts
         addsUpdates = deltas["adds"] + deltas["updates"]
         globalIds = self.GetGlobalIds()
 
@@ -314,7 +314,7 @@ class sde:
         updates = []
 
         for addUpdate in addsUpdates:
-            #check for attributes that don't exist in destination
+            # check for attributes that don't exist in destination
             keys = addUpdate['attributes'].keys()
             extra_keys = set(keys) - set(columns)
             if len(extra_keys) > 0:
@@ -370,7 +370,7 @@ class sde:
             if rowcount > 0:
                 successfulDeletes += rowcount
 
-        if(len(adds) + len(updates) + len(deleteGUIDs) > 0):  #if any edits were attempted
+        if(len(adds) + len(updates) + len(deleteGUIDs) > 0):  # if any edits were attempted
             print('')
             logging.info('SDE apply edit results:')
             Completed('add', len(adds), successfulAdds)
@@ -477,7 +477,7 @@ class sde:
 
 
     def GetSRID(self):
-        #gets SRID of featureclass
+        # gets SRID of featureclass
 
         logging.debug('Getting SRID...')#, 2)
 
@@ -489,45 +489,42 @@ class sde:
             srid = int(response.iloc[0])
         except:
             srid = NoSRID()
-        logging.debug('SRID acquired. SRID = {}'.format(srid))#, 2, indent=4)
+        logging.debug('SRID acquired. SRID = {}'.format(srid))
 
         return srid
 
 
     def GetGlobalIds(self):
-        #returns list of global ids existing in featureclass
-        logging.debug('Getting SDE global IDs...')#, 2)
+        # returns list of global ids existing in featureclass
+        logging.debug('Getting SDE global IDs...')
 
         query = "SELECT GLOBALID FROM {}".format(self.evwName)
         globalIds = self.ReadSQLWithDebug(query)
-
         globalIdsList = globalIds.iloc[:, 0].tolist()
 
-        #Debug(globalIdsList, 3)
-
-        logging.debug("{} global ID's acquired".format(len(globalIdsList)))#, 2, indent=4)
+        logging.debug("{} global ID's acquired".format(len(globalIdsList)))
 
         return globalIdsList
 
     def GetChanges(self, stateId=None):
-        #returns rows from versioned view with state id > state
+        # returns rows from versioned view with state id > state
         if not stateId:
             stateId = self.servergen['stateId']
 
-        logging.debug('Getting changes from {} since state ID {}'.format(self.evwName, stateId))#, 2)
+        logging.debug('Getting changes from {} since state ID {}'.format(self.evwName, stateId))
 
         currentStateId = self.GetCurrentStateId()
 
-        #get rows from adds table since lastState
+        # get rows from adds table since lastState
         query = "SELECT * FROM {} WHERE SDE_STATE_ID > {} AND SDE_STATE_ID <= {}".format(self.evwName, stateId, currentStateId)
         adds = self.ReadSQLWithDebug(query)
 
         if(len(adds.index) > 0 and 'shape' in adds.columns):
-            #reaquire SHAPE column as WKT
+            # reaquire SHAPE column as WKT
             query = "SELECT SHAPE.AsTextZM() FROM {} WHERE SDE_STATE_ID > {} AND SDE_STATE_ID <= {}".format(self.evwName, stateId, currentStateId)
             shape = self.ReadSQLWithDebug(query)
 
-            #replace shape column with text
+            # replace shape column with text
             adds['shape'] = shape.values
 
         return adds
@@ -536,7 +533,7 @@ class sde:
     def EditTable(self, query, expectedRowCount):
         cursor = self.connection.cursor()
 
-        logging.debug('Editing table. SQL Query: "{}"'.format(query))#, 3)
+        logging.debug('Editing table. SQL Query: "{}"'.format(query))
 
         try:
             cursor.execute(query)
@@ -556,8 +553,8 @@ class sde:
 
             try:
                 rowcount = int(cursor.messages[0][1].split('[SQL Server]')[1])
-            except Exception:
-                logging.error('Error with GetRowcount.')
+            except Exception as e:
+                logging.error('Error with GetRowcount: {}'.format(str(e)))
                 break
 
             if (rowcount == expectedRowCount) or (rowcount != -1):
@@ -577,23 +574,23 @@ class sde:
         try:
             globalId = dict_in['globalid']
         except NameError:
-            logging.error('ERROR! Add object has no global ID!\n')
+            logging.error('ERROR! Add object has no global ID!')
             print(json.dumps(dict_in))
             raise GUIDError('Add object has no global ID!')
 
-        logging.info('Adding object {}'.format(globalId))#, 2, indent=4)
+        logging.info('Adding object {}'.format(globalId))
 
         query = "INSERT INTO {} ({}) VALUES ({});".format(self.evwName, keys, values)
 
         return self.EditTable(query, 1)
 
     def Update(self, dict_in):
-        #update a feature in the versioned view of a featureclass
+        # update a feature in the versioned view of a featureclass
 
         try:
               globalId = dict_in['globalid']
         except NameError:
-              logging.error('ERROR! Update object has no global ID!\n')
+              logging.error('ERROR! Update object has no global ID!')
               print(json.dumps(dict_in))
               raise GUIDError('Update object has no global ID!')
 
@@ -613,7 +610,7 @@ class sde:
         return self.EditTable(query, 1)
 
     def Delete(self, GUID):
-        #remove feature from versioned view of featureclass
+        # remove feature from versioned view of featureclass
 
         logging.info("Deleting object '{}'".format(GUID))
 
@@ -623,17 +620,18 @@ class sde:
 
 
 def RemoveNulls(dict_in):
-    #returns dictionary with only non-null entries
-    #dict_in = {k: v for k, v in dict_in.items()}
+    # returns dictionary with only non-null entries
+    # dict_in = {k: v for k, v in dict_in.items()}
 
     return dict_in
 
 
 def CleanDeltas(dict_in):
-    #turn all keys to lower case
+    # turn all keys to lower case
     dict_in = {k.lower(): v for k, v in dict_in.items()}
 
     return dict_in
+
 
 def LowercaseDataframe(df):
     #converts all column names to lower case
@@ -725,16 +723,17 @@ def WktToEsri(WKT):
 
     return esri
 
-#get columns of datetime datatype (need to be converted)
+
 def GetDatetimeColumns(datatypes):
+    # get columns of datetime datatype (need to be converted)
     datetime_columns = (datatypes[datatypes['data_type'].str.contains('datetime')])['column_name'].tolist()
     datetime_columns = [col.lower() for col in datetime_columns]
 
     return datetime_columns
 
 
-# convert SQL datetime string to epoch timestamp
 def SqlDatetimeToEpoch(string):
+    # convert SQL datetime string to epoch timestamp
     if string is not None:
         string = string.split('.')[0]
         utc_time = datetime.strptime(string, "%Y-%m-%d %H:%M:%S")
