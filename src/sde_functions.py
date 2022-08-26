@@ -37,6 +37,11 @@ class sde:
             except KeyError:
                 self.sde_connect = None
 
+            try:
+                self.srid = service['srid']
+            except:
+                self.srid = None
+
         else: #service is none, create new service
             self.servergen = None
             self.nickname = None
@@ -73,6 +78,10 @@ class sde:
 
     # connect to sql server
     def Connect(self):
+
+        if self.connection is not None:
+            return
+
         UID = self.cfg.SQL_username
         PWD = self.cfg.SQL_password
 
@@ -94,6 +103,7 @@ class sde:
 
     def Disconnect(self):
         self.connection.close()
+        self.connection = None
 
     def Backup(self, sync_num):
         logging.info("Loading arcpy (this may take a while)...")
@@ -164,48 +174,49 @@ class sde:
     def ValidateService(self):
         #Checks that featureclass has globalids and is registered as versioned, returns versioned view name
 
-        logging.info('Validating "{}"...'.format(self.fcName))#, 1)
+        if not self.is_valid:
+            logging.info('Validating "{}"...'.format(self.fcName))#, 1)
 
-        query = "SELECT imv_view_name FROM SDE_table_registry WHERE table_name = '{}'".format(self.fcName)
-        data = self.ReadSQLWithDebug(query)
+            query = "SELECT imv_view_name FROM SDE_table_registry WHERE table_name = '{}'".format(self.fcName)
+            data = self.ReadSQLWithDebug(query)
 
-        if (len(data.index) < 1) or (data['imv_view_name'][0] is None):
-            logging.error("'{}' not found in SDE table registry. Check that it has been registered as versioned.\n".format(self.fcName))#, 1)
-            return False
+            if (len(data.index) < 1) or (data['imv_view_name'][0] is None):
+                logging.error("'{}' not found in SDE table registry. Check that it has been registered as versioned.\n".format(self.fcName))#, 1)
+                return False
 
-        evwName = data['imv_view_name'][0]
-        logging.debug("Versioned view name: {}".format(evwName))
+            evwName = data['imv_view_name'][0]
+            logging.debug("Versioned view name: {}".format(evwName))
 
-        datatypes = self.GetDatatypes()
-        datatypes['column_name'] = [val.lower() for val in datatypes['column_name']]
-        datatypes['data_type'] = [val.lower() for val in datatypes['data_type']]
+            datatypes = self.GetDatatypes()
+            datatypes['column_name'] = [val.lower() for val in datatypes['column_name']]
+            datatypes['data_type'] = [val.lower() for val in datatypes['data_type']]
 
-        globalid = datatypes.loc[datatypes['column_name'] == 'globalid']
-        shape = datatypes.loc[datatypes['column_name'] == 'shape']
+            globalid = datatypes.loc[datatypes['column_name'] == 'globalid']
+            shape = datatypes.loc[datatypes['column_name'] == 'shape']
 
-        #query = "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '{}' AND COLUMN_NAME = 'GLOBALID'".format(fcName)
-        #data = ReadSQLWithDebug(query, connection)
+            #query = "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '{}' AND COLUMN_NAME = 'GLOBALID'".format(fcName)
+            #data = ReadSQLWithDebug(query, connection)
 
-        if (len(globalid.index) < 1):
-            logging.error('Featureclass has no global IDs!')#, 0)
-            self.is_valid = False
-            return False
-        elif not (globalid['data_type'].iloc[0] == 'uniqueidentifier'):
-            logging.warning('WARNING: GlobalID is not of type "uniqueidentifier!"')
+            if (len(globalid.index) < 1):
+                logging.error('Featureclass has no global IDs!')#, 0)
+                self.is_valid = False
+                return False
+            elif not (globalid['data_type'].iloc[0] == 'uniqueidentifier'):
+                logging.warning('WARNING: GlobalID is not of type "uniqueidentifier!"')
 
-        if (len(shape.index) < 1):
-            logging.error('Featureclass has no SHAPE column!')  # , 0)
-            self.is_valid = False
-            return False
-        elif not (shape['data_type'].iloc[0] == 'geometry'):
-            logging.error('Featureclass SHAPE column is not of type "geometry"!')
-            print('Please migrate this featureclass\' storage type to "geometry".')
-            self.is_valid = False
-            return False
+            if (len(shape.index) < 1):
+                logging.error('Featureclass has no SHAPE column!')  # , 0)
+                self.is_valid = False
+                return False
+            elif not (shape['data_type'].iloc[0] == 'geometry'):
+                logging.error('Featureclass SHAPE column is not of type "geometry"!')
+                print('Please migrate this featureclass\' storage type to "geometry".')
+                self.is_valid = False
+                return False
 
-        logging.info('Featureclass is valid.')#, 1, indent=4)
-        self.evwName = evwName
-        self.is_valid = True
+            logging.info('Featureclass is valid.')#, 1, indent=4)
+            self.evwName = evwName
+            self.is_valid = True
 
         return self.GetServergen()
 
@@ -551,7 +562,7 @@ class sde:
                 break
 
         if rowcount != expectedRowCount:
-            print(messages)
+            logging.debug(messages)
             raise Error('Unexpected number of rows affected: {}; Expected: {}'.format(rowcount, expectedRowCount))
 
         return rowcount

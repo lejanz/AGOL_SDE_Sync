@@ -165,6 +165,13 @@ class sync:
                 if not loop:
                     break
 
+            first_type = self.services[0].ToDict()['type']
+            second_type = self.services[1].ToDict()['type']
+            if first_type == 'AGOL' and second_type == 'SDE':
+                self.services[1].Connect()
+                self.services[1].Validate()
+                self.services[1].GetSRID()
+
             self.UpdateLastRun()
 
     def ToDict(self):
@@ -187,10 +194,6 @@ class sync:
                '{}'
                'Child dataset:\n'
                '{}'.format(self.name, self.last_run, first, second))
-
-        #print(out)
-
-        return out
 
     def run(self):
         # print sync counter and date
@@ -265,7 +268,7 @@ class sync:
 
         except Cancelled as e:
             logging.info(e.message)
-            print('')
+            print(' ')
             return False
 
     def reregister(self):
