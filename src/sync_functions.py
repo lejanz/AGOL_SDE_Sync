@@ -288,11 +288,11 @@ class sync:
             if(serverGen):
                 service.UpdateServergen(serverGen)
                 logging.info('Servergen updated!')
-                self.UpdateLastRun()
-                return True
             else:
                 return False
 
+        self.UpdateLastRun()
+        return True
 
     def edit(self):
         logging.info('Editing sync "{}"...'.format(self.name))
