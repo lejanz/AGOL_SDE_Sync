@@ -42,7 +42,7 @@ class sde:
             except:
                 self.srid = None
 
-        else: # service is none, create new service
+        else:  # service is none, create new service
             self.servergen = None
             self.nickname = None
 
@@ -106,6 +106,10 @@ class sde:
         self.connection = None
 
     def Backup(self, sync_num):
+        self.Connect()
+        if not self.ValidateService():
+            return
+
         logging.info("Loading arcpy (this may take a while)...")
         import arcpy
 

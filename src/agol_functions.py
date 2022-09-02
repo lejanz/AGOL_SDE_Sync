@@ -233,6 +233,10 @@ class agol:
         self.servergen = servergen
 
     def Backup(self, sync_num):
+        self.Connect()
+        if not self.ValidateService():
+            return
+
         logging.info('Backing up feature service...')
 
         serverGen = self.ValidateService()

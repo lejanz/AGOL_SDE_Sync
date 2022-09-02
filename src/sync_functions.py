@@ -113,6 +113,8 @@ class sync:
                 print('Ensure that the two datasets are identical. This tool may not function correctly otherwise.\n')
 
                 self.name = ui.GetName()
+                if self.name.lower() == 'quit':
+                    raise Cancelled('cancelled')
 
                 i = 0
                 loop = False
@@ -411,6 +413,9 @@ class sync:
                             print('')
                             break
 
+    def Backup(self, sync_num):
+        for service in self.services:
+            service.Backup(sync_num)
 
     def UpdateLastRun(self):
         self.last_run = str(datetime.now())

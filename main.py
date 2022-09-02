@@ -10,6 +10,7 @@
 import json
 from src import ui_functions as ui
 from src import sync_functions
+from src.error import Cancelled
 
 logging = ui.logging
 
@@ -62,7 +63,7 @@ def main():
         
         #copy syncNames into menu so extras can be added
         menu = syncNames[:]
-        menuExtras = ['Create SYNC', 'HELP', 'Exit']
+        menuExtras = ['Create SYNC', 'HELP', 'Exit', 'Re-order SYNCs']
 
         # add extras to beginning of menu
         for index, extra in enumerate(menuExtras):
@@ -71,11 +72,16 @@ def main():
         CREATE_SYNC = 1
         HELP = 2
         EXIT = 3
+        REORDER = 4
 
         choice = ui.Options('Select a SYNC:', menu)
 
         if (choice == CREATE_SYNC): #create new sync
-            sync = sync_functions.sync(cfg)
+            try:
+                sync = sync_functions.sync(cfg)
+            except Cancelled:
+                print('')
+                continue
 
             if(sync):
                 syncs.append(sync.ToDict())
@@ -99,6 +105,54 @@ def main():
             if(len(stuff) == 0):
                 return  #ends function main()
 
+        elif (choice == REORDER):
+            print('Current order:')
+            for i, name in enumerate(syncNames):
+                i = str(i + len(menuExtras) + 1)
+                print("{}. {}".format(i, name))
+
+            print('Enter the OLD sync numbers in the NEW order in which you would like them, separated by commas, or type "quit" to cancel:')
+            while True:
+                new_order = input('Enter numbers:')
+                if new_order.lower == 'quit':
+                    break
+
+                new_order = new_order.split(',')
+                if len(new_order) != len(syncs):
+                    print('Incorrect number of entries!')
+                    continue
+
+                new_sync_nums = []
+                done = True
+                for num in new_order:
+                    try:
+                        num = int(num)
+                    except ValueError:
+                        print('Invalid entry: "{}"'.format(num))
+                        done = False
+                        break
+
+                    if (num < (len(menuExtras) + 1)) or (num > len(menu)):
+                        print('Entry out of range: {}'.format(num))
+                        done = False
+                        break
+
+                    if num in new_sync_nums:
+                        print('Duplicate entries: {}'.format(num))
+                        done = False
+                        break
+
+                    new_sync_nums.append(num)
+
+                if done:
+                    new_syncs = []
+                    for num in new_sync_nums:
+                        new_syncs.append(syncs[num - len(menuExtras) - 1])
+                    syncs = new_syncs
+                    sync_functions.WriteSyncs(syncs)
+                    print('Successfully reordered syncs!\n')
+                    break
+
         else:
             sync_index = choice - len(menuExtras) - 1
             sync = sync_functions.sync(cfg, syncs[sync_index])
@@ -117,10 +171,7 @@ def main():
 
             if (choice == BACKUP_SYNC):
                 sync_num = GetSyncNum()
-
-                for service in [sync['first'], sync['second']]:
-                    sync_functions.BackupService(service, cfg, sync_num)
-
+                sync.Backup(sync_num)
                 print('')
 
             if (choice == VIEW_SYNC):  # view sync details
