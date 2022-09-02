@@ -153,7 +153,7 @@ class sde:
         backup_name = '{}_BACKUP_{}_{}'.format(self.fcName, str(sync_num), today)
 
         fcPath = '{}\\{}.{}.{}'.format(self.sde_connect, self.database, owner, self.fcName)
-        backup_path = '{}\\{}.{}}.{}'.format(self.sde_connect, self.database, owner, backup_name)
+        backup_path = '{}\\{}.{}.{}'.format(self.sde_connect, self.database, owner, backup_name)
 
         logging.debug('Creating backup at: {}'.format(backup_name))
 
@@ -435,7 +435,7 @@ class sde:
 
     def GetOwner(self):
         query = "SELECT owner FROM sde_table_registry WHERE table_name='{}'".format(self.fcName)
-        df = self.ReadSQLWithDebug()
+        df = self.ReadSQLWithDebug(query)
         owner = df['owner'].iloc[0]
         return owner
 
