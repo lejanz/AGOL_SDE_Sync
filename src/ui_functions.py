@@ -2,6 +2,7 @@ import json
 import sys
 from datetime import datetime
 import logging as log
+from src.error import Cancelled
 
 #allows us to print to console and logfile at the same time
 # class Logger(object):
@@ -78,7 +79,9 @@ def PrintEdits(deltas, first_service, second_service):
 
 
 def GetName():
-    name = input('ENTER a name for this SYNC:')
+    name = input('ENTER a name for this SYNC, or type "quit" to go back:')
+    if name.lower() == 'quit':
+        raise Cancelled('cancelled')
     return name
 
 

@@ -114,7 +114,8 @@ def main():
             print('Enter the OLD sync numbers in the NEW order in which you would like them, separated by commas, or type "quit" to cancel:')
             while True:
                 new_order = input('Enter numbers:')
-                if new_order.lower == 'quit':
+                if new_order.lower() == 'quit':
+                    print('')
                     break
 
                 new_order = new_order.split(',')

@@ -113,8 +113,6 @@ class sync:
                 print('Ensure that the two datasets are identical. This tool may not function correctly otherwise.\n')
 
                 self.name = ui.GetName()
-                if self.name.lower() == 'quit':
-                    raise Cancelled('cancelled')
 
                 i = 0
                 loop = False
