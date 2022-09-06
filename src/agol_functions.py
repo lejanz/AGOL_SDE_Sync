@@ -147,7 +147,7 @@ class agol:
 
         return content
 
-    def ValidateService(self): #, serverGen):
+    def Query(self):
         # returns None if issue with service
         # returns False if service is missing capabilities
         # returns True, serverGen if service is set up correctly
@@ -223,8 +223,14 @@ class agol:
         self.srid = srid
         return serverGen
 
+    def ValidateService(self):
+        #if self.is_valid:
+        #    return True
+
+        return self.Query()
+
     def GetServergen(self):
-        return self.ValidateService()
+        return self.Query()
 
     def UpdateServergen(self, servergen=None):
         if not servergen:

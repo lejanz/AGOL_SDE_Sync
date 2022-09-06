@@ -520,12 +520,12 @@ class sde:
         currentStateId = self.GetCurrentStateId()
 
         # get rows from adds table since lastState
-        query = "SELECT * FROM {} WHERE SDE_STATE_ID > {} AND SDE_STATE_ID <= {}".format(self.evwName, stateId, currentStateId)
+        query = "SELECT * FROM {} WHERE SDE_STATE_ID >= {} AND SDE_STATE_ID <= {}".format(self.evwName, stateId, currentStateId)
         adds = self.ReadSQLWithDebug(query)
 
         if(len(adds.index) > 0 and 'shape' in adds.columns):
             # reaquire SHAPE column as WKT
-            query = "SELECT SHAPE.AsTextZM() FROM {} WHERE SDE_STATE_ID > {} AND SDE_STATE_ID <= {}".format(self.evwName, stateId, currentStateId)
+            query = "SELECT SHAPE.AsTextZM() FROM {} WHERE SDE_STATE_ID >= {} AND SDE_STATE_ID <= {}".format(self.evwName, stateId, currentStateId)
             shape = self.ReadSQLWithDebug(query)
 
             # replace shape column with text
@@ -755,11 +755,8 @@ def SqlToJson(df, datatypes):
 
     for i in range(0, len(df.index)):
         attributes = df.iloc[i]
-        # attributes['shape'] = [x for x in attributes['shape']]      #compress byte array into integers so it can be converted to json
         attributes = json.loads(attributes.to_json(orient='index'))
-
-        # remove nulls, convert keys to lower case
-        attributes = CleanDeltas(attributes)
+        attributes = CleanDeltas(attributes)  # remove nulls, convert keys to lower case
 
         # separate out shape
         if ('shape' in attributes.keys()):
