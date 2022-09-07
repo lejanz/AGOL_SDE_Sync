@@ -1,0 +1,5 @@
+arcgis
+pandas
+python-certifi-win32
+pyodbc==4.0.34
+requests

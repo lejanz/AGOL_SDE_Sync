@@ -7,31 +7,37 @@
 ##    sync: a pair of services registered with this tool
 ##    deltas: edits extracted from or applied to a service
 
+# TODO: add checks for libraries and library versions
+
 import json
 from src import ui_functions as ui
 from src import sync_functions
 from src.error import Cancelled
+from src.test_requirements import TestRequirements
 
 logging = ui.logging
 
-#load configuration file
+
+# load configuration file
 def LoadConfig():
-    logging.debug('Loading config...')#, 2)
+    logging.debug('Loading config...')
     try:
         from config import config
     except:
         logging.error('Error loading config!')
         return False
-        #TODO: make config builder?
+        # TODO: make config builder?
 
-    logging.debug('Config loaded.')#, 2, indent=4)
+    logging.debug('Config loaded.')
     
     return config
+
         
 def LogJson(filename, jsn): 
     file = open('json_logs\\{}.json'.format(filename), 'w')
     json.dump(jsn, file, indent=4)
     file.close()
+
 
 def GetSyncNum():
     try:
@@ -43,25 +49,28 @@ def GetSyncNum():
 
     return sync_num
 
+
 def main():
+    tr = TestRequirements()
+    tr.test_requirements()
+
     logging.debug('-------------')
     logging.debug('Program start')
-    #load config
+    # load config
     cfg = LoadConfig()
     if not cfg:
         return
-    #ui.logger.setLogLevel(cfg)
 
-    #load syncs
+    # load syncs
     syncs = sync_functions.LoadSyncs()
     stuff = ["I'm sorry, Dave.", "I can't do that, Dave.", "What are you doing, Dave?", "Goodbye, Dave."]
 
     while True:
 
-        #prompt user to select sync
+        # prompt user to select sync
         syncNames = [s['name'] for s in syncs]
         
-        #copy syncNames into menu so extras can be added
+        # copy syncNames into menu so extras can be added
         menu = syncNames[:]
         menuExtras = ['Create SYNC', 'HELP', 'Exit', 'Re-order SYNCs']
 
@@ -76,7 +85,7 @@ def main():
 
         choice = ui.Options('Select a SYNC:', menu)
 
-        if (choice == CREATE_SYNC): #create new sync
+        if (choice == CREATE_SYNC):  # create new sync
             try:
                 sync = sync_functions.sync(cfg)
             except Cancelled:
@@ -90,20 +99,20 @@ def main():
                 print('')
                 print(sync)
 
-        elif (choice == HELP): #help
+        elif (choice == HELP):  # help
             import os
             print('Opening help page...\n')
             os.system('START https://doimspp.sharepoint.com/:w:/r/sites/ext-nps-insidernsp/_layouts/15/Doc.aspx?'
                       'sourcedoc=%7B9AA1B96F-0410-43FD-9DA1-A0871BEA142B%7D&file=LSync%20Help.docx&action=default&mobileredirect=true')
 
-        elif (choice == EXIT): #exit
+        elif (choice == EXIT):  # exit
             logging.info('')
 
             print(stuff.pop(0))
             print('')
 
             if(len(stuff) == 0):
-                return  #ends function main()
+                return  # ends function main()
 
         elif (choice == REORDER):
             print('Current order:')
