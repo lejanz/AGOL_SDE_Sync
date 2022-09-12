@@ -7,8 +7,6 @@
 ##    sync: a pair of services registered with this tool
 ##    deltas: edits extracted from or applied to a service
 
-# TODO: add checks for libraries and library versions
-
 import json
 from src import ui_functions as ui
 from src import sync_functions
