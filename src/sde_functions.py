@@ -229,8 +229,9 @@ class sde:
     def GetServergen(self):
         stateId = self.GetCurrentStateId()
         globalIds = self.GetGlobalIds()
+        currentIdFeatures = self.GetFeaturesWithStateID(stateId)
 
-        return {'stateId': stateId, 'globalIds': globalIds}
+        return {'stateId': stateId, 'globalIds': globalIds, 'currentIdFeatures': currentIdFeatures}
 
     def UpdateServergen(self, servergen=None):
         if not servergen:
@@ -248,8 +249,6 @@ class sde:
         #if not self.ValidateService():
         #    raise Exception('Failed to validate featureclass')
 
-        # get featureclass data
-        self.datatypes = self.GetDatatypes()
         srid = self.GetSRID()
 
         if srid == -1:
@@ -282,14 +281,24 @@ class sde:
         adds = changes[addRows]
         updates = changes[~addRows]
 
-        adds_json = SqlToJson(adds, self.datatypes)
-        updates_json = SqlToJson(updates, self.datatypes)
+        adds_json = self.SqlToJson(adds)
+        updates_json = self.SqlToJson(updates)
+
+        # "updates" with lastStateId can be features which were not actually changed
+        # remove updates which have not been changed since last run
+        if 'currentIdFeatures' in self.servergen.keys():
+            last_id_features = set(self.servergen['currentIdFeatures'])
+            current_features = set(updates_json)
+            updates_json = list(current_features - last_id_features)
+
+            # lastStateId = self.servergen['stateId']
+            # last_id_updates = [update for update in updates_json if update['attributes']['sde_state_id'] == lastStateId]
 
         deltas = {"adds": adds_json, "updates": updates_json, "deleteIds": deleteIds}
 
         CleanJson(deltas, srid)
 
-        logging.info('SDE change extraction complete.')#, 0)
+        logging.info('SDE change extraction complete.')
 
         return deltas
 
@@ -297,11 +306,10 @@ class sde:
         # applies deltas to versioned view. Returns success codes and new SDE_STATE_ID
 
         # get connection data
-        if self.connection is None:
-            self.Connect()
-            if not self.ValidateService():
-                return False
-            self.GetDatatypes()
+        self.Connect()
+        if not self.ValidateService():
+            return False
+        self.GetDatatypes()
 
         # if backup:
         #    BackupFeatureClass(service, sync_num, connection, cfg)
@@ -334,8 +342,8 @@ class sde:
 
         deleteGUIDs = [delete.replace('{', '').replace('}', '') for delete in deltas["deleteIds"]]
 
-        adds = JsonToSql(adds, self.datatypes)
-        updates = JsonToSql(updates, self.datatypes)
+        adds = self.JsonToSql(adds)
+        updates = self.JsonToSql(updates)
 
         successfulAdds = 0
         successfulUpdates = 0
@@ -450,16 +458,16 @@ class sde:
             logging.error(cursor.messages)
             return -1
 
-
     def GetDatatypes(self):
         #grabs column datatypes from featureclass
+        if self.datatypes is None:
+            query = "SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '{}'".format(self.fcName)
+            response = self.ReadSQLWithDebug(query)
 
-        query = "SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '{}'".format(self.fcName)
-        response = self.ReadSQLWithDebug(query)
+            #print(response)
+            self.datatypes = response
 
-        #print(response)
-        self.datatypes = response
-        return response
+        return self.datatypes
 
     def GetCurrentStateId(self):
         #returns current state id of DEFAULT version
@@ -497,7 +505,6 @@ class sde:
 
         return srid
 
-
     def GetGlobalIds(self):
         # returns list of global ids existing in featureclass
         logging.debug('Getting SDE global IDs...')
@@ -510,28 +517,34 @@ class sde:
 
         return globalIdsList
 
-    def GetChanges(self, stateId=None):
+    def GetChanges(self, startStateId=None, endStateId=None):
         # returns rows from versioned view with state id > state
-        if not stateId:
-            stateId = self.servergen['stateId']
+        if startStateId is None:
+            startStateId = self.servergen['stateId']
 
-        logging.debug('Getting changes from {} since state ID {}'.format(self.evwName, stateId))
+        if endStateId is None:
+            endStateId = self.GetCurrentStateId()
 
-        currentStateId = self.GetCurrentStateId()
+        logging.debug('Getting changes from {} betwixt state IDs {} and {}'.format(self.evwName, startStateId, endStateId))
 
         # get rows from adds table since lastState
-        query = "SELECT * FROM {} WHERE SDE_STATE_ID >= {} AND SDE_STATE_ID <= {}".format(self.evwName, stateId, currentStateId)
-        adds = self.ReadSQLWithDebug(query)
+        query = "SELECT * FROM {} WHERE SDE_STATE_ID >= {} AND SDE_STATE_ID <= {}".format(self.evwName, startStateId, endStateId)
+        features = self.ReadSQLWithDebug(query)
 
-        if(len(adds.index) > 0 and 'shape' in adds.columns):
+        if (len(features.index) > 0) and ('shape' in features.columns):
             # reaquire SHAPE column as WKT
-            query = "SELECT SHAPE.AsTextZM() FROM {} WHERE SDE_STATE_ID >= {} AND SDE_STATE_ID <= {}".format(self.evwName, stateId, currentStateId)
+            query = "SELECT SHAPE.AsTextZM() FROM {} WHERE SDE_STATE_ID >= {} AND SDE_STATE_ID <= {}".format(self.evwName, startStateId, endStateId)
             shape = self.ReadSQLWithDebug(query)
 
             # replace shape column with text
-            adds['shape'] = shape.values
+            features['shape'] = shape.values
 
-        return adds
+        return features
+
+    def GetFeaturesWithStateID(self, state_id):
+        features = self.GetChanges(startStateId=state_id, endStateId=state_id)
+        json_features = self.SqlToJson(features)
+        return json_features
 
 
     def EditTable(self, query, expectedRowCount):
@@ -621,6 +634,103 @@ class sde:
         query = "DELETE FROM  {} WHERE GLOBALID = '{}'".format(self.evwName, GUID)
 
         return self.EditTable(query, 1)
+
+    def SqlToJson(self, df):
+        # takes adds or updates dataframe and converts into agol-json-like dictionary
+        dict_out = []
+
+        self.GetDatatypes()
+
+        # get columns containing datetime objects
+        datetime_columns = GetDatetimeColumns(self.datatypes)
+
+        for i in range(0, len(df.index)):
+            attributes = df.iloc[i]
+            attributes = json.loads(attributes.to_json(orient='index'))
+            attributes = CleanDeltas(attributes)  # remove nulls, convert keys to lower case
+
+            # separate out shape
+            if ('shape' in attributes.keys()):
+                try:
+                    geometry = WktToEsri(attributes['shape'])
+                except:
+                    logging.error('Error converting object "{}" from WKT to JSON!'.format(attributes['globalid']))
+                    raise
+                del attributes['shape']
+            else:
+                logging.warning('No shape')
+
+            # convert datetime strings to epoch timestamps
+            for k in attributes.keys():
+                if k in datetime_columns:
+                    epoch = SqlDatetimeToEpoch(attributes[k])
+                    attributes[k] = epoch
+
+            entry = {'geometry': geometry, 'attributes': attributes}
+            dict_out.append(entry)
+
+        return dict_out
+
+    def JsonToSql(self, deltas):
+        logging.debug("Converting json to SQL")
+        # takes adds or updates json and turns it into sql-writable format
+        dict_out = []
+
+        self.GetDatatypes()
+
+        # get datetime columns (need to be converted to epoch)
+        datetime_columns = GetDatetimeColumns(self.datatypes)
+
+        for delta in deltas:
+            # turn geometry json into syntax for SQL
+            try:
+                SHAPE = EsriToWkt(delta['geometry'])
+            except:
+                logging.error('Error converting object "{}" from json to WKT!'.format(delta['attributes']['globalid']))
+                raise
+
+            if SHAPE == -1:
+                raise  # TODO: make EsriToWkt raise instead
+
+            # extract attributes
+            attributes = delta['attributes']
+
+            # clean attributes
+            for key in attributes.keys():
+
+                # turn Nones and empty objects into NULLs for SQL
+                if (attributes[key] in [None, {}]):
+                    attributes[key] = "NULL"
+
+                # convert epoch timestamps to sql string
+                elif key.lower() in datetime_columns:
+                    timestamp = True
+                    try:
+                        epoch = int(attributes[key])
+                    except:
+                        timestamp = False
+                    if (timestamp):
+                        if epoch < 0:
+                            epoch = 0
+                        attributes[key] = "DATEADD(S, {}, '1970-01-01')".format(epoch / 1000)
+                    else:
+                        attributes[key] = "NULL"
+
+                    # add quotes to strings, escape apostrophes
+                elif (not isinstance(attributes[key], float)) and (not isinstance(attributes[key], int)):
+                    attributes[key] = str(attributes[key]).replace("'", "''")
+                    attributes[key] = "'{}'".format(attributes[key])
+
+                # convert everything else to a string for joining later
+                else:
+                    attributes[key] = str(attributes[key])
+
+            # combine attributes and shape into one dict
+            attributes.update({'shape': SHAPE})
+
+            dict_out.append(attributes)
+
+        return dict_out
 
 
 def RemoveNulls(dict_in):
@@ -746,99 +856,7 @@ def SqlDatetimeToEpoch(string):
         return None
 
 
-def SqlToJson(df, datatypes):
-    # takes adds or updates dataframe and converts into agol-json-like dictionary
-    dict_out = []
 
-    # get columns containing datetime objects
-    datetime_columns = GetDatetimeColumns(datatypes)
-
-    for i in range(0, len(df.index)):
-        attributes = df.iloc[i]
-        attributes = json.loads(attributes.to_json(orient='index'))
-        attributes = CleanDeltas(attributes)  # remove nulls, convert keys to lower case
-
-        # separate out shape
-        if ('shape' in attributes.keys()):
-            try:
-                geometry = WktToEsri(attributes['shape'])
-            except:
-                logging.error('Error converting object "{}" from WKT to JSON!'.format(attributes['globalid']))
-                raise
-            del attributes['shape']
-        else:
-            logging.warning('No shape')
-
-        # convert datetime strings to epoch timestamps
-        for k in attributes.keys():
-            if k in datetime_columns:
-                epoch = SqlDatetimeToEpoch(attributes[k])
-                attributes[k] = epoch
-
-        entry = {'geometry': geometry, 'attributes': attributes}
-        dict_out.append(entry)
-
-    return dict_out
-
-
-def JsonToSql(deltas, datatypes):
-    logging.debug("Converting json to SQL")
-    # takes adds or updates json and turns it into sql-writable format
-    dict_out = []
-
-    # get datetime columns (need to be converted to epoch)
-    datetime_columns = GetDatetimeColumns(datatypes)
-
-    for delta in deltas:
-        # turn geometry json into syntax for SQL
-        try:
-            SHAPE = EsriToWkt(delta['geometry'])
-        except:
-            logging.error('Error converting object "{}" from json to WKT!'.format(delta['attributes']['globalid']))
-            raise
-
-        if SHAPE == -1:
-            raise  # TODO: make EsriToWkt raise instead
-
-        # extract attributes
-        attributes = delta['attributes']
-
-        # clean attributes
-        for key in attributes.keys():
-
-            # turn Nones and empty objects into NULLs for SQL
-            if (attributes[key] in [None, {}]):
-                attributes[key] = "NULL"
-
-            # convert epoch timestamps to sql string
-            elif key.lower() in datetime_columns:
-                timestamp = True
-                try:
-                    epoch = int(attributes[key])
-                except:
-                    timestamp = False
-                if (timestamp):
-                    if epoch < 0:
-                        epoch = 0
-                    attributes[key] = "DATEADD(S, {}, '1970-01-01')".format(epoch / 1000)
-                else:
-                    attributes[key] = "NULL"
-
-                # add quotes to strings, escape apostrophes
-            elif (not isinstance(attributes[key], float)) and (not isinstance(attributes[key], int)):
-                attributes[key] = str(attributes[key]).replace("'", "''")
-                attributes[key] = "'{}'".format(attributes[key])
-
-            # convert everything else to a string for joining later
-            else:
-                attributes[key] = str(attributes[key])
-
-        # combine attributes and shape into one dict
-        attributes.update({'shape': SHAPE})
-
-        dict_out.append(attributes)
-
-    return dict_out
 
 def AskToCancel(e):  # asks to cancel edits after a failed edit
     logging.error(str(e))
