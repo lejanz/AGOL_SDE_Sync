@@ -4,4 +4,4 @@ $f.Filter = "Executables (*.exe)|*.exe|All Files (*.*)|*.*"
 $f.ShowHelp = $true
 $f.Multiselect = $false
 [void]$f.ShowDialog()
-$f.FileName > $PSScriptRoot\..\config\python_path.txt
+$f.FileName > "$PSScriptRoot\..\config\python_path.txt"
