@@ -287,12 +287,7 @@ class sde:
         # "updates" with lastStateId can be features which were not actually changed
         # remove updates which have not been changed since last run
         if 'currentIdFeatures' in self.servergen.keys():
-            last_id_features = set(self.servergen['currentIdFeatures'])
-            current_features = set(updates_json)
-            updates_json = list(current_features - last_id_features)
-
-            # lastStateId = self.servergen['stateId']
-            # last_id_updates = [update for update in updates_json if update['attributes']['sde_state_id'] == lastStateId]
+            updates_json = [ud for ud in updates_json if ud not in self.servergen['currentIdFeatures']]
 
         deltas = {"adds": adds_json, "updates": updates_json, "deleteIds": deleteIds}
 
