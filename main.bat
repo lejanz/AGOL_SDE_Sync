@@ -1,2 +1,2 @@
-"%~dp0%python/python.exe" main.py
+"python\python.exe" main.py
 cmd /k
