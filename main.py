@@ -12,6 +12,7 @@ from src import ui_functions as ui
 from src import sync_functions
 from src.error import Cancelled
 from src.test_requirements import TestRequirements
+import sys
 
 logging = ui.logging
 
@@ -61,16 +62,15 @@ def main():
 
     # load syncs
     syncs = sync_functions.LoadSyncs()
-    stuff = ["I'm sorry, Dave.", "I can't do that, Dave.", "What are you doing, Dave?", "Goodbye, Dave."]
 
     while True:
+        menuExtras = ['Create SYNC', 'HELP', 'Exit', 'Re-order SYNCs']
 
         # prompt user to select sync
         syncNames = [s['name'] for s in syncs]
-        
+
         # copy syncNames into menu so extras can be added
         menu = syncNames[:]
-        menuExtras = ['Create SYNC', 'HELP', 'Exit', 'Re-order SYNCs']
 
         # add extras to beginning of menu
         for index, extra in enumerate(menuExtras):
@@ -81,7 +81,24 @@ def main():
         EXIT = 3
         REORDER = 4
 
-        choice = ui.Options('Select a SYNC:', menu)
+        #handle autorun via command line
+        ui_mode = True
+        if len(sys.argv) > 2:
+            if len(sys.argv) != 4:
+                logging.warning('Unexpected number of arguments. Expected 3. Continuing in normal execution mode.')
+            else:
+                i = int(sys.argv[2])
+                if sys.argv[1] == 'run':
+                    if len(menuExtras) < i <= len(menu):
+                        choice = i
+                        ui_mode = False
+                    else:
+                        logging.warning('Sync number out of range!')
+                else:
+                    logging.warning('Unsupported command!')
+
+        if ui_mode:
+            choice = ui.Options('Select a SYNC:', menu)
 
         if (choice == CREATE_SYNC):  # create new sync
             try:
@@ -105,12 +122,7 @@ def main():
 
         elif (choice == EXIT):  # exit
             logging.info('')
-
-            print(stuff.pop(0))
-            print('')
-
-            if(len(stuff) == 0):
-                return  # ends function main()
+            return  # ends function main()
 
         elif (choice == REORDER):
             print('Current order:')
@@ -163,7 +175,7 @@ def main():
 
         else:
             sync_index = choice - len(menuExtras) - 1
-            sync = sync_functions.sync(cfg, syncs[sync_index])
+            sync = sync_functions.sync(cfg, syncs[sync_index], skip_confirmations=(not ui_mode))
             n = sync.name
 
             menu = ['Run "{}"'.format(n), 'Backup "{}"'.format(n), 'View "{}"'.format(n), 'Edit "{}"'.format(n), 'Re-register "{}"'.format(n), 'Delete "{}"'.format(n), 'Back']
@@ -175,7 +187,10 @@ def main():
             DELETE_SYNC = 6
             BACK = 7
 
-            choice = ui.Options('Select an option:', menu)
+            if ui_mode:
+                choice = ui.Options('Select an option:', menu)
+            else:
+                choice = RUN_SYNC
 
             if (choice == BACKUP_SYNC):
                 sync_num = GetSyncNum()
@@ -241,6 +256,9 @@ def main():
                     syncs[sync_index] = sync.ToDict()
                     sync_functions.WriteSyncs(syncs)
                     logging.info('')
+
+        if not ui_mode:
+            return  # don't loop if running via cmd
 
                 
 if __name__ == '__main__':

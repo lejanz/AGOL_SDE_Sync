@@ -2,7 +2,7 @@ import json
 
 from src import ui_functions as ui
 from src.error import Cancelled
-
+import sys
 from datetime import datetime
 
 logging = ui.logging
@@ -78,7 +78,8 @@ def WriteSyncs(syncs):
 
 
 class sync:
-    def __init__(self, cfg, sync_dict=None):
+    def __init__(self, cfg, sync_dict=None, skip_confirmations=False):
+        self.skip_confirmations = skip_confirmations
         if sync_dict is not None:
             self.name = sync_dict['name']
             self.cfg = cfg
@@ -234,13 +235,14 @@ class sync:
             ui.PrintEdits(second_deltas, self.services[1], self.services[0])
             print('')
 
-            # ask user to confirm before applying edits
-            menu = ["Continue", "Cancel"]
-            cancel_choice = ui.Options('Please review the extracted changes above before continuing.', menu)
+            if not self.skip_confirmations:
+                # ask user to confirm before applying edits
+                menu = ["Continue", "Cancel"]
+                cancel_choice = ui.Options('Please review the extracted changes above before continuing.', menu)
 
-            if cancel_choice == 2:
-                logging.warning('Sync cancelled. No changes were made.\n')
-                return False
+                if cancel_choice == 2:
+                    logging.warning('Sync cancelled. No changes were made.\n')
+                    return False
 
             # reconcile changes
             first_deltas, second_deltas = ResolveConflicts(first_deltas, second_deltas,
@@ -373,7 +375,7 @@ class sync:
 
                         if(choice == SDE_CONNECT):
                             print('Current .sde file: {}'.format(service.sde_connect))
-                            from sde_functions import GetSdeFilepath
+                            from src.sde_functions import GetSdeFilepath
                             sde_connect, hostname, database = GetSdeFilepath()
                             service.sde_connect = sde_connect
                             service.hostname = hostname
@@ -421,7 +423,7 @@ class sync:
     def ServiceFromJson(self, service):
         if service['type'] == 'SDE':
             ImportSDE()
-            return sde(self.cfg, service)
+            return sde(self.cfg, service, skip_confirmations=self.skip_confirmations)
         elif service['type'] == 'AGOL':
             ImportAGOL()
             return agol(self.cfg, service)
@@ -472,12 +474,22 @@ def ResolveConflicts(FIRST_deltas, SECOND_deltas, first_name, second_name):
         
         #this will loop back if "more info" is chosen
         while True:
-            #display sum of conflicts
-            #prompt user to resolve all one way, resolve manually, show more info, or cancel
-            logging.debug('{} conflicts found.'.format(total_conflicts))
-            prompt = '{} conflicts found. Choose conflict resolution:'.format(total_conflicts)
-            menu = ['Prioritize {} Changes'.format(first_name), 'Prioritize {} Changes'.format(second_name), 'Choose for each conflict', 'More info', 'Cancel']
-            choice = ui.Options(prompt, menu)
+            # display sum of conflicts
+            logging.info('{} conflicts found.'.format(total_conflicts))
+
+            ui_mode = True
+            if len(sys.argv) == 4:
+                choice = int(sys.argv[3])
+                if 1 <= choice <= 2:
+                    ui_mode = False
+                else:
+                    raise Cancelled('Conflicts found!')
+
+            if ui_mode:
+                # prompt user to resolve all one way, resolve manually, show more info, or cancel
+                prompt = 'Choose conflict resolution:'
+                menu = ['Prioritize {} Changes'.format(first_name), 'Prioritize {} Changes'.format(second_name), 'Choose for each conflict', 'More info', 'Cancel']
+                choice = ui.Options(prompt, menu)
 
             #in update/delete conflicts, update will either become add or be removed
             FIRST_updated -= FIRST_updated_SECOND_deleted

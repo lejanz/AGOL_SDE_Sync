@@ -15,12 +15,13 @@ from src.misc_functions import CleanJson
 
 
 class sde:
-    def __init__(self, cfg, service=None):
+    def __init__(self, cfg, service=None, skip_confirmations=False):
         self.cfg = cfg
         self.connection = None
         self.datatypes = None
         self.evwName = None
         self.is_valid = False
+        self.skip_confirmations = skip_confirmations
 
         if service is not None:
             if not service['type'] == 'SDE':
@@ -385,11 +386,12 @@ class sde:
             Completed('delete', len(deleteGUIDs), successfulDeletes)
             print('')
 
-            menu = ['Commit changes', 'Cancel changes']
-            choice = Options('Changes have not been committed. Commit?', menu)
+            if not self.skip_confirmations:
+                menu = ['Commit changes', 'Cancel changes']
+                choice = Options('Changes have not been committed. Commit?', menu)
 
-            if choice == 2:
-                raise Cancelled('Sync cancelled.')
+                if choice == 2:
+                    raise Cancelled('Sync cancelled.')
 
             self.connection.commit()
             logging.info('Changes committed.')
