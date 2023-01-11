@@ -643,6 +643,13 @@ class sde:
 
         for i in range(0, len(df.index)):
             attributes = df.iloc[i]
+            
+            # gdb_geomattr_data stores information for complex geometry
+            # gdb_geomattr_data is stored in binary and breaks to_json
+            # dropping this column will change all geometry to simple
+            attributes.drop(labels='gdb_geomattr_data') 
+            
+            # convert to json
             attributes = json.loads(attributes.to_json(orient='index'))
             attributes = CleanDeltas(attributes)  # remove nulls, convert keys to lower case
 
