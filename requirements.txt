@@ -1,0 +1,4 @@
+arcgis
+pandas
+pyodbc==4.0.34
+requests

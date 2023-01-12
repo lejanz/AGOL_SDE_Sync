@@ -2,6 +2,7 @@ import json
 import sys
 from datetime import datetime
 import logging as log
+from src.error import Cancelled
 
 #allows us to print to console and logfile at the same time
 # class Logger(object):
@@ -58,9 +59,8 @@ def printDate():
     print(datetime.now())
 
     
-def Debug(message, messageLevel, indent=0):
-    logger.debug('{}{}\n'.format((indent*' '), message), messageLevel)
-
+# def Debug(message, messageLevel, indent=0):
+#     logger.debug('{}{}\n'.format((indent*' '), message), messageLevel)
 
 def Break():
     print('----------------------')
@@ -70,21 +70,23 @@ def PrintEdits(deltas, first_service, second_service):
     num_adds = len(deltas['adds'])
     num_updates = len(deltas['updates'])
     num_deletes = len(deltas['deleteIds'])
-    print("{} adds, {} updates, and {} deletes will be applied from {} to {}.".format(num_adds,
+    logging.info("{} adds, {} updates, and {} deletes will be applied from {} to {}.".format(num_adds,
                                                                                         num_updates,
                                                                                         num_deletes,
-                                                                                        first_service['nickname'],
-                                                                                        second_service['nickname']))
+                                                                                        first_service.nickname,
+                                                                                        second_service.nickname))
     return num_adds + num_updates + num_deletes
 
 
 def GetName():
-    name = raw_input('ENTER a name for this SYNC:')
+    name = input('ENTER a name for this SYNC, or type "quit" to go back:')
+    if name.lower() == 'quit':
+        raise Cancelled('cancelled')
     return name
 
 
 def GetAgolURL():
-    url = raw_input('ENTER URL for LAYER (sublayer for the service). It ends in a integer; system will verify on next step):')
+    url = input('ENTER URL for LAYER (sublayer for the service). It ends in a integer; system will verify on next step):')
     url = url.strip()
 
     if (url.lower() == 'quit'):
@@ -102,44 +104,19 @@ def GetAgolURL():
     return url, layerId
 
 def GetNickname():
-    nickname = raw_input(
+    nickname = input(
         'Enter a nickname to track this FEATURE SERVICE (this is also used in conflict resolution).\n'
         'You may want to enter the storage location (AGOL or SDE) in parenthesis:')
     return nickname
 
 def GetFcName():
-    fcName = raw_input('Enter the name of the FEATURECLASS (system will verify it exists next):')
+    fcName = input('Enter the name of the FEATURECLASS (system will verify it exists next):')
     fcName = fcName.strip()  # remove whitespace from ends
 
     if fcName.lower() == 'quit':
         return False
 
     return fcName
-
-
-def PrintServiceDetails(service):
-    print('  Type: {}'.format(service['type']))
-    print('  Nickname: {}'.format(service['nickname']))
-    if(service['type'] == 'AGOL'):
-        print('  AGOL URL: {}'.format(service['serviceUrl']))
-        print('  AGOL layer: {}'.format(service['layerId']))
-    else:
-        if('sde_connect' in service.keys()):
-            print('  SDE connect file: {}'.format(service['sde_connect']))
-        print('  SQL Server: {}'.format(service['hostname']))
-        print('  SDE Database: {}'.format(service['database']))
-        print('  SDE featureclass: {}'.format(service['featureclass']))
-        print('  SDE state id: {}'.format(service['servergen']['stateId']))
-
-def PrintSyncDetails(sync):
-    print('Details of sync "{}":'.format(sync['name']))
-    if ('last_run' in sync.keys()):  # for backwards compatibility with old sync.json versions
-        print("Last run: {}".format(sync['last_run']))
-    print("Parent dataset:")
-    PrintServiceDetails(sync['first'])
-    print("Child dataset:")
-    PrintServiceDetails(sync['second'])
-    print('')
 
 def Completed(attempt, attempted, completed):
     #prints number of attempted/successful adds, updates, or deletes. 
@@ -173,7 +150,7 @@ def Options(prompt, menu, allow_filter=False, filter_string = ''):
         string = ', or type to filter'
 
     while True:
-        response = unicode(raw_input('Enter selection{}:'.format(string)))
+        response = input('Enter selection{}:'.format(string))
         print('')
         if(response.isnumeric()):
             response = int(response)

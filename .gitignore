@@ -5,6 +5,6 @@ syncs.json
 *.log
 
 config/*
-
+python/*
 json_logs/*
 .idea
